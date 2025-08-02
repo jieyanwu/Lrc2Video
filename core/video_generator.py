@@ -68,7 +68,7 @@ class VideoGenerator:
             fade_in = config.get('fade_in', 500)
             fade_out = config.get('fade_out', 500)
             event.text = f"{{\\an2\\fad({fade_in},{fade_out})}}" + event.text
-    
+    # 修改 core/video_generator.py 中的 generate_video 方法部分
     def generate_video(self, audio_path, lrc_path, config, bg_image_path=None, output_path=None):
         """生成单个视频"""
         try:
@@ -82,12 +82,39 @@ class VideoGenerator:
             
             # 解析歌词文件
             try:
-                subs = pysubs2.load(str(lrc_path), format_='lrc', encoding='utf-8')
-            except:
+                subs = None
+                
+                # 使用更完善的编码检测方法
+                from utils.encoding_detector import read_text_file_safe
+                
                 try:
-                    subs = parse_lrc_manually(lrc_path)
+                    # 首先尝试使用 encoding_detector 工具读取文件
+                    lrc_content, detected_encoding = read_text_file_safe(lrc_path)
+                    # 尝试直接从内容创建 SSAFile
+                    subs = pysubs2.SSAFile.from_string(lrc_content, format_="lrc")
+                    self.update_progress(15, 100, f"使用{detected_encoding}编码成功解析歌词")
                 except Exception as e:
-                    return False, f"LRC文件解析失败: {str(e)}"
+                    # 如果上面的方法失败，尝试原来的备选方案
+                    encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'gb18030']
+                    
+                    for encoding in encodings:
+                        try:
+                            subs = pysubs2.load(str(lrc_path), format_='lrc', encoding=encoding)
+                            if subs:
+                                self.update_progress(15, 100, f"使用{encoding}编码成功解析歌词")
+                                break
+                        except Exception as e:
+                            continue
+                    
+                    # 如果pysubs2加载失败，使用手动解析
+                    if not subs:
+                        self.update_progress(10, 100, "使用手动解析模式...")
+                        subs = parse_lrc_manually(lrc_path)
+                        
+            except Exception as e:
+                return False, f"LRC文件解析失败: {str(e)}"
+            
+        # ... 其余代码保持不变 ...
             
             if not subs:
                 return False, "LRC文件中没有找到有效的歌词"
