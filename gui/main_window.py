@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Tkinter桌面版 - 歌词视频生成器（支持文件夹批量导入）
+主窗口GUI
 """
 
 import os
-import subprocess
-import re
-import json
 import threading
 from pathlib import Path
 from tkinter import *
 from tkinter import ttk, filedialog, messagebox, colorchooser
 from tkinter.scrolledtext import ScrolledText
-import pysubs2
+
+from core.video_generator import VideoGenerator
+from utils.file_utils import scan_folder_for_files
 
 class LyricsVideoGenerator:
     def __init__(self, root):
@@ -26,6 +25,14 @@ class LyricsVideoGenerator:
         self.file_pairs = []  # [(audio_path, lrc_path), ...]
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
+        
+        # 视频生成器
+        self.video_generator = VideoGenerator(progress_callback=self.update_progress)
+        
+        # 进度相关变量
+        self.current_file_progress = 0
+        self.total_files_progress = 0
+        self.current_file_name = ""
         
         self.setup_ui()
         
@@ -128,6 +135,16 @@ class LyricsVideoGenerator:
         font_frame = LabelFrame(parent, text="字体设置", padx=10, pady=10, bg='white')
         font_frame.pack(fill=X, pady=(0, 10))
         
+        # 字体族
+        font_family_frame = Frame(font_frame, bg='white')
+        font_family_frame.pack(fill=X, pady=5)
+        Label(font_family_frame, text="字体:", bg='white', width=15, anchor='w').pack(side=LEFT)
+        self.font_family = StringVar(value="Microsoft YaHei")
+        font_combo = ttk.Combobox(font_family_frame, textvariable=self.font_family, 
+                                 values=["Microsoft YaHei", "SimHei", "Arial", "Times New Roman", "宋体", "黑体"],
+                                 state="readonly", width=20)
+        font_combo.pack(side=LEFT, padx=10)
+        
         # 字体大小
         size_frame = Frame(font_frame, bg='white')
         size_frame.pack(fill=X, pady=5)
@@ -171,6 +188,34 @@ class LyricsVideoGenerator:
         self.outline_color_btn = Button(outline_color_frame, text="选择颜色", bg=self.outline_color.get(),
                                        command=lambda: self.choose_color(self.outline_color, self.outline_color_btn))
         self.outline_color_btn.pack(side=LEFT, padx=10)
+        
+        # 位置设置
+        position_frame = LabelFrame(parent, text="位置设置", padx=10, pady=10, bg='white')
+        position_frame.pack(fill=X, pady=(0, 10))
+        
+        # 底部边距
+        margin_frame = Frame(position_frame, bg='white')
+        margin_frame.pack(fill=X, pady=5)
+        Label(margin_frame, text="底部边距:", bg='white', width=15, anchor='w').pack(side=LEFT)
+        self.margin_bottom = IntVar(value=50)
+        Scale(margin_frame, from_=0, to=200, orient=HORIZONTAL, variable=self.margin_bottom).pack(side=LEFT, fill=X, expand=True, padx=10)
+        
+        # 特效设置
+        effect_frame = LabelFrame(parent, text="特效设置", padx=10, pady=10, bg='white')
+        effect_frame.pack(fill=X, pady=(0, 10))
+        
+        # 淡入淡出时间
+        fade_frame = Frame(effect_frame, bg='white')
+        fade_frame.pack(fill=X, pady=5)
+        Label(fade_frame, text="淡入时间(ms):", bg='white', width=15, anchor='w').pack(side=LEFT)
+        self.fade_in = IntVar(value=500)
+        Scale(fade_frame, from_=0, to=2000, orient=HORIZONTAL, variable=self.fade_in).pack(side=LEFT, fill=X, expand=True, padx=10)
+        
+        fade_out_frame = Frame(effect_frame, bg='white')
+        fade_out_frame.pack(fill=X, pady=5)
+        Label(fade_out_frame, text="淡出时间(ms):", bg='white', width=15, anchor='w').pack(side=LEFT)
+        self.fade_out = IntVar(value=500)
+        Scale(fade_out_frame, from_=0, to=2000, orient=HORIZONTAL, variable=self.fade_out).pack(side=LEFT, fill=X, expand=True, padx=10)
         
         # 背景设置
         bg_frame = LabelFrame(parent, text="背景设置", padx=10, pady=10, bg='white')
@@ -217,22 +262,48 @@ class LyricsVideoGenerator:
                               bg='#dc3545', fg='white', font=("Arial", 12), state=DISABLED)
         self.stop_btn.pack(side=LEFT, padx=10)
         
-        # 进度显示
+        # 进度显示区域
         progress_frame = LabelFrame(parent, text="处理进度", padx=10, pady=10, bg='white')
         progress_frame.pack(fill=BOTH, expand=True)
         
-        self.progress_var = StringVar(value="准备就绪")
-        progress_label = Label(progress_frame, textvariable=self.progress_var, bg='white', font=("Arial", 10))
-        progress_label.pack(pady=5)
+        # 当前文件信息
+        current_file_frame = Frame(progress_frame, bg='white')
+        current_file_frame.pack(fill=X, pady=5)
         
-        self.progress_bar = ttk.Progressbar(progress_frame, mode='determinate')
-        self.progress_bar.pack(fill=X, pady=5)
+        Label(current_file_frame, text="当前文件:", bg='white', width=10, anchor='w').pack(side=LEFT)
+        self.current_file_var = StringVar(value="无")
+        Label(current_file_frame, textvariable=self.current_file_var, bg='white', fg='#007bff').pack(side=LEFT, padx=10)
+        
+        # 当前文件进度
+        current_progress_frame = Frame(progress_frame, bg='white')
+        current_progress_frame.pack(fill=X, pady=5)
+        
+        Label(current_progress_frame, text="文件进度:", bg='white', width=10, anchor='w').pack(side=LEFT)
+        self.current_file_progress_var = StringVar(value="0%")
+        Label(current_progress_frame, textvariable=self.current_file_progress_var, bg='white').pack(side=LEFT, padx=10)
+        
+        self.current_file_progress_bar = ttk.Progressbar(current_progress_frame, mode='determinate')
+        self.current_file_progress_bar.pack(side=LEFT, fill=X, expand=True, padx=10)
+        
+        # 总体进度（仅批量模式显示）
+        total_progress_frame = Frame(progress_frame, bg='white')
+        total_progress_frame.pack(fill=X, pady=5)
+        
+        Label(total_progress_frame, text="总体进度:", bg='white', width=10, anchor='w').pack(side=LEFT)
+        self.total_progress_var = StringVar(value="0/0")
+        Label(total_progress_frame, textvariable=self.total_progress_var, bg='white').pack(side=LEFT, padx=10)
+        
+        self.total_progress_bar = ttk.Progressbar(total_progress_frame, mode='determinate')
+        self.total_progress_bar.pack(side=LEFT, fill=X, expand=True, padx=10)
+        
+        # 状态信息
+        self.status_var = StringVar(value="准备就绪")
+        status_label = Label(progress_frame, textvariable=self.status_var, bg='white', font=("Arial", 10))
+        status_label.pack(pady=5)
         
         # 日志显示
         self.log_text = ScrolledText(progress_frame, height=15, wrap=WORD)
         self.log_text.pack(fill=BOTH, expand=True, pady=10)
-        
-        self.stop_flag = False
         
     def select_audio(self):
         filename = filedialog.askopenfilename(
@@ -280,51 +351,34 @@ class LyricsVideoGenerator:
         if not folder_path:
             messagebox.showwarning("警告", "请先选择文件夹")
             return
-            
-        folder = Path(folder_path)
-        if not folder.exists():
-            messagebox.showerror("错误", "文件夹不存在")
-            return
-            
+        
         # 清空现有列表
         for item in self.file_tree.get_children():
             self.file_tree.delete(item)
         self.file_pairs.clear()
         
-        # 查找音频文件
-        audio_extensions = {'.mp3', '.flac', '.wav', '.m4a', '.aac'}
-        audio_files = {}
-        
-        for file in folder.rglob('*'):
-            if file.suffix.lower() in audio_extensions:
-                name = file.stem
-                audio_files[name] = file
-                
-        # 查找对应的歌词文件
-        for name, audio_file in audio_files.items():
-            lrc_file = None
-            # 在同一目录查找
-            potential_lrc = audio_file.parent / f"{name}.lrc"
-            if potential_lrc.exists():
-                lrc_file = potential_lrc
-            else:
-                # 在整个文件夹查找
-                for lrc in folder.rglob(f"{name}.lrc"):
-                    lrc_file = lrc
-                    break
-                    
-            if lrc_file:
-                self.file_pairs.append((audio_file, lrc_file))
+        try:
+            file_pairs, missing_files = scan_folder_for_files(folder_path)
+            self.file_pairs = file_pairs
+            
+            # 显示找到的配对文件
+            for audio_file, lrc_file in file_pairs:
                 self.file_tree.insert('', 'end', values=(audio_file.name, lrc_file.name))
-            else:
+            
+            # 显示缺少歌词的文件
+            for audio_file in missing_files:
                 self.file_tree.insert('', 'end', values=(audio_file.name, "未找到匹配的歌词文件"), tags=('missing',))
-                
-        self.file_tree.tag_configure('missing', background='#ffcccc')
-        self.log(f"扫描完成：找到 {len(self.file_pairs)} 个有效的音频-歌词配对")
-        
+            
+            self.file_tree.tag_configure('missing', background='#ffcccc')
+            self.log(f"扫描完成：找到 {len(file_pairs)} 个有效的音频-歌词配对，{len(missing_files)} 个文件缺少歌词")
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"扫描文件夹时出错：{str(e)}")
+            
     def get_config(self):
         width, height = self.resolution.get().split('x')
         return {
+            'font_family': self.font_family.get(),
             'font_size': self.font_size.get(),
             'font_color': self.font_color.get(),
             'outline_width': self.outline_width.get(),
@@ -336,12 +390,38 @@ class LyricsVideoGenerator:
             'height': int(height),
             'margin_left': 10,
             'margin_right': 10,
+            'margin_bottom': self.margin_bottom.get(),
+            'fade_in': self.fade_in.get(),
+            'fade_out': self.fade_out.get(),
+            'shadow_color': '#000000',
             'shadow_offset': 2
         }
         
     def log(self, message):
         self.log_text.insert(END, f"{message}\n")
         self.log_text.see(END)
+        self.root.update_idletasks()
+        
+    def update_progress(self, current, total, message=""):
+        """更新进度回调函数"""
+        self.current_file_progress = current
+        
+        # 更新当前文件进度
+        self.current_file_progress_var.set(f"{current}%")
+        self.current_file_progress_bar['value'] = current
+        
+        # 更新状态信息
+        if message:
+            self.status_var.set(message)
+        
+        self.root.update_idletasks()
+        
+    def update_total_progress(self, current_file, total_files):
+        """更新总体进度"""
+        self.total_files_progress = current_file
+        self.total_progress_var.set(f"{current_file}/{total_files}")
+        self.total_progress_bar['maximum'] = total_files
+        self.total_progress_bar['value'] = current_file
         self.root.update_idletasks()
         
     def generate_single_video(self):
@@ -356,22 +436,28 @@ class LyricsVideoGenerator:
         config = self.get_config()
         output_path = self.output_dir / f"{Path(audio_path).stem}.mp4"
         
+        # 更新UI状态
         self.single_generate_btn.config(state=DISABLED)
-        self.progress_var.set("正在生成视频...")
+        self.current_file_var.set(Path(audio_path).name)
+        self.total_progress_var.set("1/1")
+        self.total_progress_bar['maximum'] = 1
+        self.total_progress_bar['value'] = 0
         
         def generate():
             try:
-                success, result = self.generate_video(audio_path, lrc_path, config, bg_image_path, output_path)
+                success, result = self.video_generator.generate_video(audio_path, lrc_path, config, bg_image_path, output_path)
                 if success:
                     self.log(f"✅ 视频生成成功：{result}")
-                    self.progress_var.set("生成完成")
+                    self.status_var.set("生成完成")
+                    self.total_progress_bar['value'] = 1
                     messagebox.showinfo("成功", f"视频已保存到：{result}")
                 else:
                     self.log(f"❌ 生成失败：{result}")
-                    self.progress_var.set("生成失败")
+                    self.status_var.set("生成失败")
                     messagebox.showerror("错误", f"生成失败：{result}")
             finally:
                 self.single_generate_btn.config(state=NORMAL)
+                self.current_file_var.set("无")
                 
         threading.Thread(target=generate, daemon=True).start()
         
@@ -380,23 +466,27 @@ class LyricsVideoGenerator:
             messagebox.showwarning("警告", "没有找到有效的文件配对，请先扫描文件夹")
             return
             
-        self.stop_flag = False
+        # 重置视频生成器的停止标志
+        self.video_generator.set_stop_flag(False)
+        
+        # 更新UI状态
         self.batch_generate_btn.config(state=DISABLED)
         self.stop_btn.config(state=NORMAL)
-        self.progress_bar['maximum'] = len(self.file_pairs)
-        self.progress_bar['value'] = 0
+        self.total_progress_bar['maximum'] = len(self.file_pairs)
+        self.total_progress_bar['value'] = 0
         
         def batch_generate():
             config = self.get_config()
             success_count = 0
             
             for i, (audio_path, lrc_path) in enumerate(self.file_pairs):
-                if self.stop_flag:
+                if self.video_generator.stop_flag:
                     self.log("❌ 批量生成已停止")
                     break
-                    
-                self.progress_var.set(f"正在处理 {i+1}/{len(self.file_pairs)}: {audio_path.name}")
-                self.progress_bar['value'] = i
+                
+                # 更新当前处理的文件
+                self.current_file_var.set(audio_path.name)
+                self.update_total_progress(i, len(self.file_pairs))
                 
                 output_path = self.output_dir / f"{audio_path.stem}.mp4"
                 
@@ -409,183 +499,29 @@ class LyricsVideoGenerator:
                             bg_image_path = bg_file
                             break
                     
-                    success, result = self.generate_video(audio_path, lrc_path, config, bg_image_path, output_path)
+                    success, result = self.video_generator.generate_video(audio_path, lrc_path, config, bg_image_path, output_path)
                     if success:
                         self.log(f"✅ [{i+1}/{len(self.file_pairs)}] {audio_path.name} 生成成功")
                         success_count += 1
                     else:
                         self.log(f"❌ [{i+1}/{len(self.file_pairs)}] {audio_path.name} 生成失败：{result}")
+                        
                 except Exception as e:
                     self.log(f"❌ [{i+1}/{len(self.file_pairs)}] {audio_path.name} 处理异常：{str(e)}")
-                    
-            self.progress_bar['value'] = len(self.file_pairs)
-            if not self.stop_flag:
-                self.progress_var.set(f"批量生成完成：成功 {success_count}/{len(self.file_pairs)}")
+            
+            # 完成后更新UI
+            self.update_total_progress(len(self.file_pairs), len(self.file_pairs))
+            if not self.video_generator.stop_flag:
+                self.status_var.set(f"批量生成完成：成功 {success_count}/{len(self.file_pairs)}")
                 messagebox.showinfo("完成", f"批量生成完成！\n成功：{success_count}\n总计：{len(self.file_pairs)}")
             
             self.batch_generate_btn.config(state=NORMAL)
             self.stop_btn.config(state=DISABLED)
+            self.current_file_var.set("无")
             
         threading.Thread(target=batch_generate, daemon=True).start()
         
     def stop_generation(self):
-        self.stop_flag = True
+        self.video_generator.set_stop_flag(True)
         self.stop_btn.config(state=DISABLED)
-        
-    def parse_lrc_manually(self, lrc_path):
-        try:
-            with open(lrc_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-        except UnicodeDecodeError:
-            for enc in ['gbk', 'gb2312', 'latin-1', 'cp1252']:
-                try:
-                    with open(lrc_path, 'r', encoding=enc) as f:
-                        content = f.read()
-                    break
-                except: 
-                    continue
-            else:
-                raise ValueError("无法识别 LRC 文件编码")
-
-        subs = pysubs2.SSAFile()
-        time_pattern = r'\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]'
-        for line in content.splitlines():
-            matches = list(re.finditer(time_pattern, line))
-            text = re.sub(time_pattern, '', line).strip()
-            if matches and text:
-                for match in matches:
-                    m, s, cs = int(match[1]), int(match[2]), int(match[3] or 0)
-                    start_ms = (m * 60 + s) * 1000 + cs * 10
-                    subs.append(pysubs2.SSAEvent(start=start_ms, end=start_ms + 3000, text=text))
-        
-        for i in range(len(subs)-1): 
-            subs[i].end = subs[i+1].start
-        if subs: 
-            subs[-1].end = subs[-1].start + 3000
-        return subs
-
-    def extract_cover_image(self, audio_path, cover_path):
-        try:
-            cmd = ['ffmpeg', '-y', '-i', str(audio_path), '-an', '-vcodec', 'copy', str(cover_path)]
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return cover_path.exists()
-        except:
-            return False
-
-    def generate_video(self, audio_path, lrc_path, config, bg_image_path=None, output_path=None):
-        try:
-            if output_path is None:
-                output_path = Path(f"{Path(audio_path).stem}.mp4")
-            
-            # 解析歌词文件
-            try:
-                subs = pysubs2.load(str(lrc_path), format_='lrc', encoding='utf-8')
-            except:
-                subs = self.parse_lrc_manually(lrc_path)
-            
-            if not subs:
-                return False, "LRC文件中没有找到有效的歌词"
-
-            # 设置字幕样式
-            style = subs.styles['Default']
-            style.fontname = config.get('font_family', '猫啃网风雅宋')
-            style.fontsize = config.get('font_size', 36)
-            style.alignment = 5  # 中心对齐
-            style.marginv = 0
-            style.marginl = config.get('margin_left', 10)
-            style.marginr = config.get('margin_right', 10)
-            style.outline = config.get('outline_width', 3)
-            style.shadow = config.get('shadow_offset', 2)
-            style.bold = -1 if config.get('bold', True) else 0
-            style.italic = -1 if config.get('italic', False) else 0
-
-            def hex_to_ass_color(hex_color):
-                hex_color = hex_color.lstrip('#')
-                r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-                return (b << 16) | (g << 8) | r
-
-            style.primarycolour = hex_to_ass_color(config.get('font_color', '#FFFFFF'))
-            style.outlinecolour = hex_to_ass_color(config.get('outline_color', '#000000'))
-
-            # 添加淡入淡出效果
-            for event in subs:
-                event.text = "{\\an5\\fad(500,500)}" + event.text
-
-            # 保存字幕文件
-            ass_path = Path('temp_sub.ass')
-            subs.save(str(ass_path))
-
-            # 获取音频时长
-            duration = 300
-            try:
-                result = subprocess.run([
-                    'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-                    '-of', 'default=noprint_wrappers=1:nokey=1', str(audio_path)
-                ], capture_output=True, text=True)
-                duration = float(result.stdout.strip())
-            except: 
-                pass
-
-            # 尝试从音频文件提取封面
-            if not bg_image_path:
-                cover_path = Path('temp_cover.jpg')
-                if self.extract_cover_image(audio_path, cover_path):
-                    bg_image_path = cover_path
-
-            # 生成FFmpeg命令
-            if bg_image_path and Path(bg_image_path).exists():
-                cmd = [
-                    'ffmpeg', '-loop', '1', '-i', str(bg_image_path), '-i', str(audio_path),
-                    '-filter_complex', f'[0:v]scale={config.get("width",1920)}:{config.get("height",1080)},subtitles=temp_sub.ass[v]',
-                    '-map', '[v]', '-map', '1:a', '-c:v', 'libx264', '-t', str(duration),
-                    '-c:a', 'aac', '-b:a', '192k', '-shortest', '-y', str(output_path)
-                ]
-            else:
-                bg_color = config.get('background_color', '#000000').lstrip('#')
-                cmd = [
-                    'ffmpeg', '-f', 'lavfi',
-                    '-i', f'color=c={bg_color}:s={config.get("width", 1920)}x{config.get("height", 1080)}:r=25',
-                    '-i', str(audio_path),
-                    '-filter_complex', f'[0:v]subtitles=temp_sub.ass[v]',
-                    '-map', '[v]', '-map', '1:a',
-                    '-c:v', 'libx264', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-y',
-                    str(output_path)
-                ]
-
-            # 执行FFmpeg命令
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
-            
-            # 清理临时文件
-            if ass_path.exists(): 
-                ass_path.unlink()
-            temp_cover = Path('temp_cover.jpg')
-            if temp_cover.exists():
-                temp_cover.unlink()
-                
-            return True, str(output_path.absolute())
-
-        except subprocess.CalledProcessError as e:
-            return False, f"FFmpeg错误: {e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)}"
-        except Exception as e:
-            return False, str(e)
-
-def main():
-    root = Tk()
-    app = LyricsVideoGenerator(root)
-    
-    # 设置窗口图标和样式
-    try:
-        root.iconbitmap(default='icon.ico')  # 如果有图标文件
-    except:
-        pass
-    
-    # 优雅退出处理
-    def on_closing():
-        if messagebox.askokcancel("退出", "确定要退出程序吗？"):
-            root.destroy()
-    
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-    root.mainloop()
-
-if __name__ == '__main__':
-    main()
+        self.status_var.set("正在停止...")
