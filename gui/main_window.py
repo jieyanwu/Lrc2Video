@@ -452,9 +452,9 @@ class LyricsVideoGenerator:
                     self.total_progress_bar['value'] = 1
                     messagebox.showinfo("成功", f"视频已保存到：{result}")
                 else:
-                    self.log(f"❌ 生成失败：{result}")
-                    self.status_var.set("生成失败")
-                    messagebox.showerror("错误", f"生成失败：{result}")
+                    self.log(f"❌ 单个生成失败：{result}")
+                    self.status_var.set("单个生成失败")
+                    messagebox.showerror("错误", f"单个生成失败：{result}")
             finally:
                 self.single_generate_btn.config(state=NORMAL)
                 self.current_file_var.set("无")
@@ -504,7 +504,7 @@ class LyricsVideoGenerator:
                         self.log(f"✅ [{i+1}/{len(self.file_pairs)}] {audio_path.name} 生成成功")
                         success_count += 1
                     else:
-                        self.log(f"❌ [{i+1}/{len(self.file_pairs)}] {audio_path.name} 生成失败：{result}")
+                        self.log(f"❌ [{i+1}/{len(self.file_pairs)}] {audio_path.name} 11生成失败：{result}")
                         
                 except Exception as e:
                     self.log(f"❌ [{i+1}/{len(self.file_pairs)}] {audio_path.name} 处理异常：{str(e)}")

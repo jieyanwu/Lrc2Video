@@ -1,3 +1,3 @@
 pysubs2>=1.6.1
 pathlib
-chardet>=4.0.0
+tkinter

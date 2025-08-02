@@ -8,74 +8,42 @@ import re
 import subprocess
 from pathlib import Path
 import pysubs2
-from .encoding_detector import read_text_file_safe
 
 def parse_lrc_manually(lrc_path):
     """手动解析LRC文件"""
     try:
-        # 使用安全的文件读取方法
-        content, encoding = read_text_file_safe(lrc_path)
-        print(f"LRC文件编码: {encoding}")
-    except Exception as e:
-        raise ValueError(f"无法读取LRC文件: {str(e)}")
-    
-    if not content.strip():
-        raise ValueError("LRC文件内容为空")
+        with open(lrc_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            print(f"成功使用 utf-8 读取文件: {lrc_path}")
+    except UnicodeDecodeError:
+        for enc in ['gbk', 'gb2312', 'latin-1', 'cp1252']:
+            try:
+                with open(lrc_path, 'r', encoding=enc) as f:
+                    content = f.read()
+                    print(f"成功使用 {enc} 读取文件: {lrc_path}")
+                break
+            except: 
+                continue
+        else:
+            raise ValueError("无法识别 LRC 文件编码")
 
-    # 解析LRC内容
     subs = pysubs2.SSAFile()
     time_pattern = r'\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]'
     
-    lines_processed = 0
-    lines_with_time = 0
-    
     for line in content.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-            
-        lines_processed += 1
         matches = list(re.finditer(time_pattern, line))
         text = re.sub(time_pattern, '', line).strip()
-        
         if matches and text:
-            lines_with_time += 1
             for match in matches:
-                try:
-                    m, s, cs = int(match[1]), int(match[2]), int(match[3] or 0)
-                    # 确保时间值在合理范围内
-                    if m > 59:  # 如果分钟数过大，可能是小时:分钟格式
-                        h = m // 60
-                        m = m % 60
-                        start_ms = (h * 3600 + m * 60 + s) * 1000 + cs * 10
-                    else:
-                        start_ms = (m * 60 + s) * 1000 + cs * 10
-                    
-                    # 创建字幕事件，默认持续3秒
-                    event = pysubs2.SSAEvent(start=start_ms, end=start_ms + 3000, text=text)
-                    subs.append(event)
-                except (ValueError, IndexError) as e:
-                    print(f"解析时间标签时出错: {match.group()} - {e}")
-                    continue
-    
-    print(f"处理了 {lines_processed} 行，找到 {lines_with_time} 行包含时间标签")
-    
-    if not subs:
-        raise ValueError(f"LRC文件中没有找到有效的歌词时间标签。处理了 {lines_processed} 行文本。")
-    
-    # 按时间排序
-    subs.sort()
+                m, s, cs = int(match[1]), int(match[2]), int(match[3] or 0)
+                start_ms = (m * 60 + s) * 1000 + cs * 10
+                subs.append(pysubs2.SSAEvent(start=start_ms, end=start_ms + 3000, text=text))
     
     # 调整结束时间
     for i in range(len(subs)-1): 
-        if subs[i].end > subs[i+1].start:
-            subs[i].end = subs[i+1].start
-    
-    # 最后一个字幕的结束时间
+        subs[i].end = subs[i+1].start
     if subs: 
         subs[-1].end = subs[-1].start + 3000
-    
-    print(f"成功解析 {len(subs)} 条歌词")
     return subs
 
 def extract_cover_image(audio_path, cover_path):
