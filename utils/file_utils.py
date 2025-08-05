@@ -29,15 +29,24 @@ def parse_lrc_manually(lrc_path):
 
     subs = pysubs2.SSAFile()
     time_pattern = r'\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]'
-    
     for line in content.splitlines():
         matches = list(re.finditer(time_pattern, line))
-        text = re.sub(time_pattern, '', line).strip()
+        text   = re.sub(time_pattern, '', line).strip()
         if matches and text:
-            for match in matches:
-                m, s, cs = int(match[1]), int(match[2]), int(match[3] or 0)
-                start_ms = (m * 60 + s) * 1000 + cs * 10
-                subs.append(pysubs2.SSAEvent(start=start_ms, end=start_ms + 3000, text=text))
+            # 只取最早的那个时间戳
+            m, s, cs = map(int, matches[0].groups(default='0'))
+            start_ms = (m * 60 + s) * 1000 + cs * 10
+            subs.append(pysubs2.SSAEvent(start=start_ms,
+                                        end=start_ms + 3000,
+                                        text=text))
+    # for line in content.splitlines():
+    #     matches = list(re.finditer(time_pattern, line))
+    #     text = re.sub(time_pattern, '', line).strip()
+    #     if matches and text:
+    #         for match in matches:
+    #             m, s, cs = int(match[1]), int(match[2]), int(match[3] or 0)
+    #             start_ms = (m * 60 + s) * 1000 + cs * 10
+    #             subs.append(pysubs2.SSAEvent(start=start_ms, end=start_ms + 3000, text=text))
     
     # 调整结束时间
     for i in range(len(subs)-1): 
