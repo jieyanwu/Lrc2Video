@@ -27,8 +27,10 @@ class VideoGenerator:
     def hex_to_ass_color(self, hex_color):
         hex_color = hex_color.lstrip('#')
         r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        print(f"原始颜色: {hex_color}, 转换后: &H{b:02x}{g:02x}{r:02x}")  # 调试日志
-        return f"&H{b:02x}{g:02x}{r:02x}"
+        # ASS颜色格式是BGR顺序的十六进制整数，包含透明度(FF)
+        color_int = int(f"00{b:02x}{g:02x}{r:02x}", 16)
+        print(f"原始颜色: {hex_color}, 转换后: {color_int} (&H00{b:02x}{g:02x}{r:02x})")  # 调试日志
+        return color_int
 
     def apply_subtitle_style(self, subs, config):
         print(f"接收到的颜色配置: {config.get('font_color')}")  # 调试日志
@@ -60,9 +62,9 @@ class VideoGenerator:
         style.italic = -1 if config.get('italic', False) else 0
         
         # 设置颜色
-        style.primarycolour = self.hex_to_ass_color(config.get('font_color', '#FFFFFF'))
-        style.outlinecolour = self.hex_to_ass_color(config.get('outline_color', '#000000'))
-        style.backcolour = self.hex_to_ass_color(config.get('shadow_color', '#000000'))
+        style.primarycolor = self.hex_to_ass_color(config.get('font_color', '#FFFFFF'))
+        style.outlinecolor = self.hex_to_ass_color(config.get('outline_color', '#000000'))
+        style.backcolor = self.hex_to_ass_color(config.get('shadow_color', '#000000'))
         
         # 为每个字幕事件添加特效
         for event in subs:
