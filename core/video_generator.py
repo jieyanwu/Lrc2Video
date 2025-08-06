@@ -22,14 +22,16 @@ class VideoGenerator:
         """更新进度"""
         if self.progress_callback:
             self.progress_callback(current, total, message)
-    
+            
+
     def hex_to_ass_color(self, hex_color):
-        """将十六进制颜色转换为ASS颜色格式"""
         hex_color = hex_color.lstrip('#')
         r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        return (b << 16) | (g << 8) | r
-    
+        print(f"原始颜色: {hex_color}, 转换后: &H{b:02x}{g:02x}{r:02x}")  # 调试日志
+        return f"&H{b:02x}{g:02x}{r:02x}"
+
     def apply_subtitle_style(self, subs, config):
+        print(f"接收到的颜色配置: {config.get('font_color')}")  # 调试日志
         """应用字幕样式"""
         # 获取默认样式，如果不存在则创建
         if 'Default' not in subs.styles:
@@ -223,6 +225,7 @@ class VideoGenerator:
                 str(output_path)
             ]
         
+        print(cmd)
         return cmd
     
     def parse_ffmpeg_progress(self, output_line, total_duration):

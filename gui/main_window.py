@@ -19,7 +19,7 @@ class LyricsVideoGenerator:
         self.root = root
         self.root.title("🎵 歌词视频生成器")
         self.root.geometry("900x700")
-        self.root.configure(bg='#f0f2f5')
+        self.root.configure(bg="#6090da")
         
         # 存储文件列表
         self.file_pairs = []  # [(audio_path, lrc_path), ...]
@@ -38,11 +38,11 @@ class LyricsVideoGenerator:
         
     def setup_ui(self):
         # 主框架
-        main_frame = Frame(self.root, bg='#f0f2f5', padx=20, pady=20)
+        main_frame = Frame(self.root, bg="#c7daf7", padx=20, pady=20)
         main_frame.pack(fill=BOTH, expand=True)
         
         # 标题
-        title_label = Label(main_frame, text="🎵 歌词视频生成器", 
+        title_label = Label(main_frame, text="歌词视频生成器", 
                            font=("Arial", 20, "bold"), bg='#f0f2f5', fg='#333')
         title_label.pack(pady=(0, 20))
         
@@ -62,10 +62,18 @@ class LyricsVideoGenerator:
         batch_frame = Frame(notebook, bg='white', padx=20, pady=20)
         notebook.add(batch_frame, text="批量处理")
         
+        # 测试页面
+        test_frame = Frame(notebook, bg='white', padx=20, pady=20)
+        notebook.add(test_frame, text="测试")
+
         self.setup_file_page(file_frame)
         self.setup_style_page(style_frame)
         self.setup_batch_page(batch_frame)
+        self.setup_test_page(test_frame)
         
+    def setup_test_page(self, parent):
+        Label(parent, text="测试页面内容待开发...", bg='white', font=("Arial", 14)).pack(pady=20)
+
     def setup_file_page(self, parent):
         # 单文件选择区域
         single_frame = LabelFrame(parent, text="单文件模式", padx=10, pady=10, bg='white')
@@ -160,6 +168,7 @@ class LyricsVideoGenerator:
         self.font_color_btn = Button(color_frame, text="选择颜色", bg=self.font_color.get(),
                                     command=lambda: self.choose_color(self.font_color, self.font_color_btn))
         self.font_color_btn.pack(side=LEFT, padx=10)
+        # 假设 self.font_color 已经是 "#FFFFFF" 这样的值
         
         # 字体样式
         style_frame = Frame(font_frame, bg='white')
@@ -188,7 +197,7 @@ class LyricsVideoGenerator:
         self.outline_color_btn = Button(outline_color_frame, text="选择颜色", bg=self.outline_color.get(),
                                        command=lambda: self.choose_color(self.outline_color, self.outline_color_btn))
         self.outline_color_btn.pack(side=LEFT, padx=10)
-        
+        # 假设 self.font_color 已经是 "#FFFFFF" 这样的值
         # 位置设置
         position_frame = LabelFrame(parent, text="位置设置", padx=10, pady=10, bg='white')
         position_frame.pack(fill=X, pady=(0, 10))
@@ -229,6 +238,7 @@ class LyricsVideoGenerator:
         self.bg_color_btn = Button(bg_color_frame, text="选择颜色", bg=self.bg_color.get(),
                                   command=lambda: self.choose_color(self.bg_color, self.bg_color_btn))
         self.bg_color_btn.pack(side=LEFT, padx=10)
+        # 假设 self.font_color 已经是 "#FFFFFF" 这样的值
         
         # 视频尺寸
         size_frame = LabelFrame(parent, text="视频尺寸", padx=10, pady=10, bg='white')
@@ -434,6 +444,7 @@ class LyricsVideoGenerator:
             
         bg_image_path = self.bg_var.get() if self.bg_var.get() else None
         config = self.get_config()
+        print(config)
         output_path = self.output_dir / f"{Path(audio_path).stem}.mp4"
         
         # 更新UI状态

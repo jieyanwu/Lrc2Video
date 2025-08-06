@@ -10,7 +10,6 @@ from gui.main_window import LyricsVideoGenerator
 def main():
     root = Tk()
     app = LyricsVideoGenerator(root)
-    
     # 设置窗口图标和样式
     try:
         root.iconbitmap(default='icon.ico')  # 如果有图标文件
