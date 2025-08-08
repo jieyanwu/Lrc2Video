@@ -1,0 +1,16 @@
+{
+  "font_family": "Arial",
+  "font_size": 42,
+  "font_color": "#00FF00",
+  "outline_width": 4,
+  "outline_color": "#FF0000",
+  "background_color": "#1a1a1a",
+  "bold": true,
+  "italic": false,
+  "width": 1920,
+  "height": 1080,
+  "margin_bottom": 60,
+  "fade_in": 800,
+  "fade_out": 800,
+  "concurrency": 3
+}
