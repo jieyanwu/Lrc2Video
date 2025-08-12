@@ -1,0 +1,4 @@
+pysubs2>=1.6.1
+pathlib
+tkinter
+flask

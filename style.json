@@ -1,0 +1,19 @@
+{
+  "font_family": "Microsoft YaHei",
+  "font_size": 36,
+  "font_color": "#c961ff",
+  "outline_width": 1,
+  "outline_color": "#ffffff",
+  "background_color": "#000000",
+  "bold": true,
+  "italic": false,
+  "width": 1920,
+  "height": 1080,
+  "margin_left": 10,
+  "margin_right": 10,
+  "margin_bottom": 78,
+  "fade_in": 383,
+  "fade_out": 316,
+  "shadow_color": "#000000",
+  "shadow_offset": 2
+}
