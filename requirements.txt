@@ -1,4 +1,18 @@
+# 核心依赖
 pysubs2>=1.6.1
-pathlib
-tkinter
-flask
+openai>=1.0.0
+
+# 标准库（通常不需要安装）
+# pathlib - Python 3.4+ 内置
+# tkinter - Python 3.x 内置
+# json - Python 标准库
+# os - Python 标准库
+# logging - Python 标准库
+# subprocess - Python 标准库
+# re - Python 标准库
+# platform - Python 标准库
+# datetime - Python 标准库
+# threading - Python 标准库
+
+# 可选依赖（根据需要安装）
+# requests - 用于网络请求

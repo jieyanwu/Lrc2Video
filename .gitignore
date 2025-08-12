@@ -38,6 +38,9 @@ logs/
 output/
 *.log
 
+# 敏感配置文件
+config/config.json
+
 # 临时文件
 *.tmp
 *.temp

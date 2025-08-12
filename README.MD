@@ -1,16 +1,19 @@
 # 🎵 歌词视频生成器
 
-一个用于生成歌词视频的Python桌面应用程序，支持单文件和批量处理模式。
+一个用于生成歌词视频的Python桌面应用程序，支持单文件和批量处理模式，内置AI智能标题生成功能。
 
 ## ✨ 功能特色
 
 - 🎬 **单文件模式**：生成单个歌词视频
 - 📁 **批量处理**：一次性处理整个文件夹的音频和歌词文件
+- 🤖 **AI智能标题**：基于OpenAI API自动生成视频标题和描述
 - 🎨 **样式自定义**：丰富的字体、颜色、特效设置
 - 📊 **实时进度**：详细的进度显示，支持当前文件和总体进度
 - 🖼️ **智能背景**：自动提取音频封面或使用自定义背景图片
 - 💾 **码率保持**：保持原音频文件的码率
 - 🛑 **可控制**：支持中途停止处理
+- 🎨 **样式导入/导出**：支持样式配置的导入和导出
+- 💾 **自动保存**：样式设置自动保存到配置文件
 
 ## 🔧 系统要求
 
@@ -22,8 +25,8 @@
 
 1. 克隆项目：
 ```bash
-git clone https://github.com/your-repo/lyrics-video-generator.git
-cd lyrics-video-generator
+git clone https://github.com/jieyanwu/Lrc2Video.git
+cd Lrc2Video
 ```
 
 2. 安装依赖：
@@ -59,23 +62,35 @@ python main.py
 ## 📁 项目结构
 
 ```
-lyrics-video-generator/
+Lrc2Video/
 ├── main.py                 # 主程序入口
 ├── requirements.txt        # 依赖文件
 ├── README.md              # 项目说明
+├── config/                # 配置文件目录
+│   └── config.json        # 用户配置文件
 ├── core/                  # 核心功能模块
 │   ├── __init__.py
-│   └── video_generator.py # 视频生成器
+│   ├── video_generator.py # 视频生成器
+│   └── ai_title_generator.py # AI标题生成器
 ├── gui/                   # GUI模块
 │   ├── __init__.py
-│   └── main_window.py     # 主窗口
+│   ├── main_window.py     # 主窗口
+│   └── settings_window.py # 设置窗口
 ├── utils/                 # 工具模块
 │   ├── __init__.py
-│   └── file_utils.py      # 文件处理工具
+│   ├── file_utils.py      # 文件处理工具
+│   └── config_manager.py  # 配置管理器
 └── output/               # 默认输出目录
 ```
 
 ## ⚙️ 配置说明
+
+详细配置文档请参考 [CONFIG.md](CONFIG.md) 文件。
+
+### AI标题设置
+- **OpenAI API密钥**：在设置菜单中配置
+- **启用AI标题**：可选择是否为每个视频生成智能标题
+- **自定义提示词**：支持自定义AI生成标题的提示词
 
 ### 字体设置
 - **字体族**：支持多种中英文字体
@@ -97,6 +112,11 @@ lyrics-video-generator/
 ### 视频设置
 - **分辨率**：支持1920x1080、1280x720等常见分辨率
 - **背景颜色**：无背景图片时使用的纯色背景
+
+### 样式管理
+- **导出样式**：将当前样式设置保存为JSON文件
+- **导入样式**：从JSON文件导入样式配置
+- **自动保存**：所有设置自动保存到配置文件
 
 ## 🎯 文件命名规则
 
@@ -135,6 +155,15 @@ lyrics-video-generator/
 4. **生成的视频没有声音**
    - 检查音频文件是否完整
    - 确认音频格式被FFmpeg支持
+
+5. **AI标题生成功能无法使用**
+   - 确保已正确配置OpenAI API密钥
+   - 检查网络连接是否正常
+   - 确认API密钥有足够的余额
+
+6. **样式导入后未保存**
+   - 导入样式后程序会自动保存到配置文件
+   - 检查config/config.json文件是否有写入权限
 
 ## 📄 许可证
 

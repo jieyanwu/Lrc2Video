@@ -1,30 +1,73 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-主窗口GUI
+主窗口GUI - 现代化界面设计 - 调试增强版
 """
 
 import os
+import json
+import logging
 import threading
 from pathlib import Path
 from tkinter import *
 from tkinter import ttk, filedialog, messagebox, colorchooser
 from tkinter.scrolledtext import ScrolledText
+from .modern_theme import COLORS, FONTS, create_modern_button, create_modern_entry, create_modern_label, create_modern_frame
 
 from core.video_generator import VideoGenerator
 from utils.file_utils import scan_folder_for_files
+
+# 设置日志
+logger = logging.getLogger(__name__)
 
 class LyricsVideoGenerator:
     def __init__(self, root):
         self.root = root
         self.root.title("🎵 歌词视频生成器")
-        self.root.geometry("900x700")
-        self.root.configure(bg="#6090da")
+        self.root.geometry("1000x750")
+        self.root.configure(bg="#f5f5f5")
+        self.root.option_add('*Font', ('Segoe UI', 10))
+        
+        # 设置窗口图标
+        try:
+            self.root.iconbitmap('icon.ico')
+        except:
+            pass
         
         # 存储文件列表
         self.file_pairs = []  # [(audio_path, lrc_path), ...]
+        self.debug_files_loaded = 0
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
+        
+        # 文件路径变量
+        self.audio_var = StringVar()
+        self.lrc_var = StringVar()
+        self.bg_var = StringVar()
+        self.folder_var = StringVar()
+        self.output_var = StringVar(value=str(self.output_dir))
+        
+        # 样式配置变量
+        self.font_family = StringVar(value="Arial")
+        self.font_size = IntVar(value=24)
+        self.font_color = StringVar(value="#ffffff")
+        self.outline_width = IntVar(value=2)
+        self.outline_color = StringVar(value="#000000")
+        self.bg_color = StringVar(value="#000000")
+        self.margin_bottom = IntVar(value=50)
+        self.fade_in = IntVar(value=500)
+        self.fade_out = IntVar(value=500)
+        self.bold_var = BooleanVar(value=True)
+        self.italic_var = BooleanVar(value=False)
+        self.concurrency_var = IntVar(value=2)
+        self.resolution = StringVar(value="1920x1080")
+        
+        # AI标题生成相关变量
+        self.ai_title_enabled = BooleanVar(value=False)
+        
+        # AI标题生成相关变量
+        self.ai_title_enabled = BooleanVar(value=False)
+        self.openai_api_key = StringVar(value="")
         
         # 视频生成器
         self.video_generator = VideoGenerator(progress_callback=self.update_progress)
@@ -34,297 +77,790 @@ class LyricsVideoGenerator:
         self.total_files_progress = 0
         self.current_file_name = ""
         
+        # 配置管理器
+        from utils.config_manager import get_config
+        self.config_manager = get_config()
+        self.user_preferences = {}
+        self.preferences_file = Path("config") / "config.json"
+        
         # 绑定窗口关闭事件
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
+        # 加载用户偏好
+        self.load_user_preferences()
+        
         self.setup_ui()
         
+        # 应用保存的偏好设置
+        self.apply_user_preferences()
+        
+        # 添加调试状态栏
+        self.setup_debug_status_bar()
+        logger.info("🎨 主窗口初始化完成")
+        
     def setup_ui(self):
-        # 主框架
-        main_frame = Frame(self.root, bg="#c7daf7", padx=20, pady=20)
-        main_frame.pack(fill=BOTH, expand=True)
+        # 设置主题样式
+        self.setup_styles()
         
-        # 标题
-        title_label = Label(main_frame, text="歌词视频生成器", 
-                           font=("Arial", 20, "bold"), bg='#f0f2f5', fg='#333')
-        title_label.pack(pady=(0, 20))
+        # 创建菜单栏
+        self.create_menu_bar()
         
-        # 创建Notebook用于分页
-        notebook = ttk.Notebook(main_frame)
+        # 主框架 - 现代化设计
+        main_frame = Frame(self.root, bg=COLORS['background'])
+        main_frame.pack(fill=BOTH, expand=True, padx=0, pady=0)
+        
+        # 顶部标题栏 - 渐变效果
+        header_frame = Frame(main_frame, bg=COLORS['primary'], height=80)
+        header_frame.pack(fill=X)
+        header_frame.pack_propagate(False)
+        
+        title_label = Label(header_frame, text="🎵 歌词视频生成器", 
+                           font=FONTS['title'], bg=COLORS['primary'], fg='white')
+        title_label.pack(pady=20)
+        
+        # 内容区域
+        content_frame = Frame(main_frame, bg=COLORS['background'], padx=30, pady=20)
+        content_frame.pack(fill=BOTH, expand=True)
+        
+        # 创建现代化Notebook
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # 自定义Notebook样式
+        style.configure('Modern.TNotebook', 
+                       background='#ffffff',
+                       borderwidth=0,
+                       tabmargins=[0, 0, 0, 0])
+        style.configure('Modern.TNotebook.Tab',
+                       background='#f5f5f5',
+                       foreground='#666666',
+                       padding=[20, 10],
+                       font=('Segoe UI', 11),
+                       borderwidth=0)
+        style.map('Modern.TNotebook.Tab',
+                 background=[('selected', '#ffffff'), ('active', '#e0e0e0')],
+                 foreground=[('selected', '#2196F3'), ('active', '#666666')])
+        
+        # 创建Notebook
+        notebook = ttk.Notebook(content_frame, style='Modern.TNotebook')
         notebook.pack(fill=BOTH, expand=True)
         
-        # 文件选择页面
-        file_frame = Frame(notebook, bg='white', padx=20, pady=20)
-        notebook.add(file_frame, text="文件选择")
+        # 创建页面框架
+        frames = []
+        for tab_name in ["📁 文件选择", "🎨 样式设置", "⚙️ 批量处理"]:
+            frame = Frame(notebook, bg='#ffffff', padx=25, pady=20)
+            frames.append(frame)
+            notebook.add(frame, text=tab_name)
         
-        # 样式设置页面
-        style_frame = Frame(notebook, bg='white', padx=20, pady=20)
-        notebook.add(style_frame, text="样式设置")
+        file_frame, style_frame, batch_frame = frames
         
-        # 批量处理页面
-        batch_frame = Frame(notebook, bg='white', padx=20, pady=20)
-        notebook.add(batch_frame, text="批量处理")
-        
-        # 测试页面
-        test_frame = Frame(notebook, bg='white', padx=20, pady=20)
-        notebook.add(test_frame, text="测试")
-
+        # 设置各页面
         self.setup_file_page(file_frame)
         self.setup_style_page(style_frame)
         self.setup_batch_page(batch_frame)
-        self.setup_test_page(test_frame)
         
-    def setup_test_page(self, parent):
-        Label(parent, text="测试页面内容待开发...", bg='white', font=("Arial", 14)).pack(pady=20)
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # 文件菜单
+        file_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="文件", menu=file_menu)
+        file_menu.add_command(label="新建项目", command=self.new_project)
+        file_menu.add_command(label="打开项目", command=self.open_project)
+        file_menu.add_separator()
+        file_menu.add_command(label="退出", command=self.on_closing)
+        
+        # 设置菜单
+        settings_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="设置", menu=settings_menu)
+        settings_menu.add_command(label="AI标题配置", command=self.open_ai_config)
+        settings_menu.add_separator()
+        settings_menu.add_command(label="首选项", command=self.open_preferences)
+        
+        # 帮助菜单
+        help_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="帮助", menu=help_menu)
+        help_menu.add_command(label="使用说明", command=self.show_help)
+        help_menu.add_command(label="关于", command=self.show_about)
+    
+    def open_ai_config(self):
+        """打开AI配置对话框"""
+        try:
+            from .ai_config_dialog import AIConfigDialog
+            dialog = AIConfigDialog(self.root)
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开AI配置：{str(e)}")
+    
+    def new_project(self):
+        """新建项目"""
+        # 清空当前选择
+        self.audio_var.set("")
+        self.lrc_var.set("")
+        self.bg_var.set("")
+        self.folder_var.set("")
+        
+        # 清空文件列表
+        for item in self.file_tree.get_children():
+            self.file_tree.delete(item)
+        self.file_pairs.clear()
+        
+        self.log("已创建新项目")
+    
+    def open_project(self):
+        """打开项目"""
+        # 这里可以添加项目文件支持
+        messagebox.showinfo("提示", "项目文件功能开发中...")
+    
+    def open_preferences(self):
+        """打开首选项"""
+        messagebox.showinfo("提示", "首选项功能开发中...")
+    
+    def show_help(self):
+        """显示帮助"""
+        help_text = """🎵 歌词视频生成器使用说明
+
+1. 文件选择
+   • 单个文件：选择音频文件、歌词文件和背景图片
+   • 批量处理：选择文件夹自动扫描配对文件
+
+2. 样式设置
+   • 调整字体、颜色、大小等参数
+   • 预览效果并保存样式配置
+
+3. AI标题生成
+   • 在设置中配置AI标题功能
+   • 支持OpenAI、OpenRouter、Moonshot AI
+   • 自动为视频生成吸引人的标题
+
+4. 开始生成
+   • 点击生成按钮开始处理
+   • 实时查看进度和日志"""
+        
+        messagebox.showinfo("使用说明", help_text)
+    
+    def show_about(self):
+        """显示关于信息"""
+        about_text = """🎵 歌词视频生成器 v2.1
+
+一个现代化的歌词视频生成工具
+支持AI智能标题生成和批量处理
+
+功能特点：
+• 支持多种音频格式
+• 智能歌词同步
+• AI标题生成
+• 批量处理
+• 现代化界面
+
+© 2024 歌词视频生成器"""
+        
+        messagebox.showinfo("关于", about_text)
+    
+    def setup_styles(self):
+        """设置现代化样式"""
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # 定义颜色主题
+        self.colors = {
+            'primary': '#2196F3',
+            'primary_dark': '#1976D2',
+            'secondary': '#FF4081',
+            'background': '#ffffff',
+            'surface': '#f5f5f5',
+            'text_primary': '#212121',
+            'text_secondary': '#666666',
+            'border': '#e0e0e0',
+            'success': '#4CAF50',
+            'warning': '#FF9800',
+            'error': '#F44336'
+        }
+        
+        # 按钮样式
+        style.configure('Modern.TButton',
+                       background=self.colors['primary'],
+                       foreground='white',
+                       borderwidth=0,
+                       focusthickness=0,
+                       focuscolor='none',
+                       font=('Segoe UI', 10),
+                       padding=[16, 8])
+        style.map('Modern.TButton',
+                 background=[('active', self.colors['primary_dark'])])
+        
+        # 输入框样式
+        style.configure('Modern.TEntry',
+                       fieldbackground='white',
+                       background='white',
+                       foreground=self.colors['text_primary'],
+                       borderwidth=1,
+                       relief='solid')
+        
+        # 标签框架样式
+        style.configure('Modern.TLabelframe',
+                       background=self.colors['background'],
+                       borderwidth=1,
+                       relief='solid')
+        style.configure('Modern.TLabelframe.Label',
+                       background=self.colors['background'],
+                       foreground=self.colors['text_primary'],
+                       font=('Segoe UI', 11, 'bold'))
+
+    def create_modern_button(self, parent, text, command=None, style='primary'):
+        """创建现代化按钮"""
+        colors = {
+            'primary': {'bg': '#2196F3', 'active': '#1976D2'},
+            'secondary': {'bg': '#f5f5f5', 'active': '#e0e0e0'},
+            'success': {'bg': '#4CAF50', 'active': '#45a049'},
+            'danger': {'bg': '#F44336', 'active': '#da190b'}
+        }
+        
+        btn = Button(parent, text=text, command=command,
+                    bg=colors[style]['bg'], fg='white' if style != 'secondary' else '#333',
+                    activebackground=colors[style]['active'], activeforeground='white' if style != 'secondary' else '#333',
+                    relief='flat', bd=0, font=('Segoe UI', 10), cursor='hand2',
+                    padx=16, pady=8)
+        return btn
+
+    def create_modern_label(self, parent, text, font_size=10, bold=False, text_color=None):
+        """创建现代化标签"""
+        font = ('Segoe UI', font_size, 'bold' if bold else 'normal')
+        color = text_color if text_color else '#333333'
+        return Label(parent, text=text, font=font, bg='#ffffff', fg=color)
+
+    def create_modern_frame(self, parent, title=None):
+        """创建现代化框架"""
+        if title:
+            frame = LabelFrame(parent, text=title, bg='#ffffff', 
+                             font=('Segoe UI', 11, 'bold'), fg='#333333',
+                             relief='solid', bd=1, padx=15, pady=15)
+        else:
+            frame = Frame(parent, bg='#ffffff')
+        return frame
+
+    def setup_debug_status_bar(self):
+        """设置调试状态栏"""
+        # 创建状态栏框架
+        status_frame = Frame(self.root, bg='#f0f0f0', height=25)
+        status_frame.pack(side=BOTTOM, fill=X)
+        status_frame.pack_propagate(False)
+        
+        # 左侧状态标签
+        self.status_label = Label(
+            status_frame, 
+            text="就绪", 
+            bg='#f0f0f0', 
+            fg='#666666', 
+            font=('Segoe UI', 9)
+        )
+        self.status_label.pack(side=LEFT, padx=10)
+        
+        # 右侧调试信息
+        debug_label = Label(
+            status_frame, 
+            text="调试模式已启用", 
+            bg='#f0f0f0', 
+            fg='#2196F3', 
+            font=('Segoe UI', 9)
+        )
+        debug_label.pack(side=RIGHT, padx=10)
+        
+        # 文件计数器
+        self.file_count_label = Label(
+            status_frame, 
+            text="文件: 0", 
+            bg='#f0f0f0', 
+            fg='#666666', 
+            font=('Segoe UI', 9)
+        )
+        self.file_count_label.pack(side=RIGHT, padx=5)
+        
+    def update_debug_status(self, message, level="info"):
+        """更新调试状态信息"""
+        colors = {
+            "info": "#2196F3",
+            "success": "#4CAF50", 
+            "warning": "#FF9800",
+            "error": "#F44336"
+        }
+        
+        self.status_label.config(text=message, fg=colors.get(level, "#666666"))
+        logger.info(f"状态更新: {message}")
+        
+        # 更新文件计数
+        count = len(self.file_pairs)
+        self.file_count_label.config(text=f"文件: {count}")
+        
+        # 强制更新界面
+        self.root.update_idletasks()
+
+    def load_user_preferences(self):
+        """加载用户偏好设置"""
+        try:
+            # 使用新的统一配置管理器
+            from utils.config_manager import get_config
+            config_manager = get_config()
+            self.user_preferences = config_manager._config
+            
+            # 检查是否需要询问用户是否使用上次设置
+            last_session = self.user_preferences.get('app', {}).get('last_session', {})
+            if last_session.get('remember_folders', True) and last_session.get('audio_folder'):
+                # 询问用户是否使用上次设置
+                if messagebox.askyesno(
+                    "恢复上次设置",
+                    f"是否恢复上次使用的文件夹？\n\n"
+                    f"音频文件夹: {last_session.get('audio_folder', 'N/A')}\n"
+                    f"输出文件夹: {last_session.get('output_folder', 'N/A')}\n"
+
+                ):
+                    return True
+        except Exception as e:
+            print(f"加载用户偏好失败: {e}")
+            self.create_default_preferences()
+        return False
+
+    def create_default_preferences(self):
+        """创建默认用户偏好 - 使用新的统一配置结构"""
+        self.user_preferences = {
+            "app": {
+                "theme": "light",
+                "language": "zh-CN",
+                "auto_save": True,
+                "show_tooltips": True,
+                "window_size": "1200x800",
+                "split_pane_position": 0.6,
+                "last_session": {
+                    "audio_folder": "",
+                    "output_folder": "output",
+
+                    "ai_title_enabled": False,
+                    "openai_api_key": "",
+                    "remember_folders": True
+                }
+            },
+            "video": {
+                "font_family": "Microsoft YaHei",
+                "font_size": 36,
+                "font_color": "#FFFFFF",
+                "outline_width": 3,
+                "outline_color": "#000000",
+                "background_color": "#000000",
+                "bold": True,
+                "italic": False,
+                "margin_bottom": 50,
+                "fade_in": 500,
+                "fade_out": 500,
+                "concurrency": 2,
+                "resolution": "1920x1080",
+                "preset": "medium",
+                "tune": "film",
+                "crf": 23,
+                "hardware_acceleration": "none",
+                "thread_count": 0
+            },
+            "ai": {
+                "ai_title_enabled": False,
+                "ai_title_prompt": "请为这首歌曲生成一个15-25字的视频标题",
+                "auto_cleanup": True,
+                "fallback_to_default": True
+            },
+            "lyrics": {
+                "sync_offset": 0,
+                "line_spacing": 1.2,
+                "karaoke_mode": False
+            },
+            "paths": {
+                "output_dir": "output",
+                "temp_dir": "temp"
+            }
+        }
+
+    def apply_user_preferences(self):
+        """应用用户偏好设置到界面"""
+        style_config = self.user_preferences.get('video', {})
+        ai_config = self.user_preferences.get('ai', {})
+        last_session = self.user_preferences.get('app', {}).get('last_session', {})
+        
+        # 应用样式配置
+        if 'font_family' in style_config:
+            self.font_family.set(style_config['font_family'])
+        if 'font_size' in style_config:
+            self.font_size.set(style_config['font_size'])
+        if 'font_color' in style_config:
+            self.font_color.set(style_config['font_color'])
+            self.font_color_btn.config(bg=style_config['font_color'])
+        if 'outline_width' in style_config:
+            self.outline_width.set(style_config['outline_width'])
+        if 'outline_color' in style_config:
+            self.outline_color.set(style_config['outline_color'])
+            self.outline_color_btn.config(bg=style_config['outline_color'])
+        if 'background_color' in style_config:
+            self.bg_color.set(style_config['background_color'])
+            self.bg_color_btn.config(bg=style_config['background_color'])
+        if 'bold' in style_config:
+            self.bold_var.set(style_config['bold'])
+        if 'italic' in style_config:
+            self.italic_var.set(style_config['italic'])
+        if 'margin_bottom' in style_config:
+            self.margin_bottom.set(style_config['margin_bottom'])
+        if 'fade_in' in style_config:
+            self.fade_in.set(style_config['fade_in'])
+        if 'fade_out' in style_config:
+            self.fade_out.set(style_config['fade_out'])
+        if 'concurrency' in style_config:
+            self.concurrency_var.set(style_config['concurrency'])
+        if 'resolution' in style_config:
+            self.resolution.set(style_config['resolution'])
+        
+        # 应用AI配置
+        if 'ai_title_enabled' in ai_config:
+            self.ai_title_enabled.set(ai_config['ai_title_enabled'])
+        
+        # 应用API配置 (从会话设置中获取)
+        api_key = last_session.get('openai_api_key', '')
+        if api_key:
+            self.openai_api_key.set(api_key)
+        
+        # 应用优化配置 (从视频配置中获取)
+        if hasattr(self, 'hwaccel_var') and 'hardware_acceleration' in style_config:
+            self.hwaccel_var.set(style_config['hardware_acceleration'])
+        if hasattr(self, 'preset_var') and 'preset' in style_config:
+            self.preset_var.set(style_config['preset'])
+        if hasattr(self, 'crf_var') and 'crf' in style_config:
+            self.crf_var.set(style_config['crf'])
+        if hasattr(self, 'tune_var') and 'tune' in style_config:
+            self.tune_var.set(style_config['tune'])
+        if hasattr(self, 'thread_count') and 'thread_count' in style_config:
+            self.thread_count.set(style_config['thread_count'])
+        
+        # 应用会话设置
+        if last_session.get('audio_folder') and os.path.exists(last_session['audio_folder']):
+            self.folder_var.set(last_session['audio_folder'])
+        if last_session.get('output_folder') and os.path.exists(last_session['output_folder']):
+            self.output_var.set(last_session['output_folder'])
+            self.output_dir = Path(last_session['output_folder'])
+
+        if last_session.get('ai_title_enabled'):
+            self.ai_title_enabled.set(True)
+        if last_session.get('openai_api_key'):
+            self.openai_api_key.set(last_session['openai_api_key'])
+
+    def save_user_preferences(self):
+        """保存用户偏好设置"""
+        try:
+            # 获取当前配置
+            current_config = self.get_config()
+            
+            # 更新用户偏好
+            self.user_preferences['video'] = current_config
+            self.user_preferences['ai']['ai_title_enabled'] = self.ai_title_enabled.get()
+            
+            # 更新会话设置
+            self.user_preferences['app']['last_session'] = {
+                "audio_folder": self.folder_var.get(),
+                "output_folder": str(self.output_dir),
+                "ai_title_enabled": self.ai_title_enabled.get(),
+                "openai_api_key": self.openai_api_key.get(),
+                "remember_folders": True
+            }
+            
+            # 使用配置管理器保存
+            from utils.config_manager import get_config
+            config = get_config()
+            config._config = self.user_preferences
+            config.save_config()
+                
+            print("用户偏好已保存")
+                
+        except Exception as e:
+            print(f"保存用户偏好失败: {e}")
+
+    def auto_save_preferences(self):
+        """自动保存偏好设置（延迟保存，避免频繁操作）"""
+        if hasattr(self, '_save_timer'):
+            self.root.after_cancel(self._save_timer)
+        self._save_timer = self.root.after(1000, self.save_user_preferences)  # 1秒后保存
+
+    def get_config(self):
+        """获取当前配置"""
+        config = {
+            "font_family": self.font_family.get(),
+            "font_size": self.font_size.get(),
+            "font_color": self.font_color.get(),
+            "outline_width": self.outline_width.get(),
+            "outline_color": self.outline_color.get(),
+            "background_color": self.bg_color.get(),
+            "bold": self.bold_var.get(),
+            "italic": self.italic_var.get(),
+            "margin_bottom": self.margin_bottom.get(),
+            "fade_in": self.fade_in.get(),
+            "fade_out": self.fade_out.get(),
+            "concurrency": self.concurrency_var.get(),
+            "resolution": self.resolution.get()
+        }
+        
+        # 添加新的配置项（如果存在对应的变量）
+        if hasattr(self, 'preset_var'):
+            config["preset"] = self.preset_var.get()
+        if hasattr(self, 'tune_var'):
+            config["tune"] = self.tune_var.get()
+        if hasattr(self, 'crf_var'):
+            config["crf"] = self.crf_var.get()
+        if hasattr(self, 'hwaccel_var'):
+            config["hwaccel"] = self.hwaccel_var.get()
+        if hasattr(self, 'thread_count'):
+            config["thread_count"] = self.thread_count.get()
+            
+        return config
 
     def setup_file_page(self, parent):
-        # API功能开关区域
-        api_frame = LabelFrame(parent, text="API功能", padx=10, pady=10, bg='white')
-        api_frame.pack(fill=X, pady=(0, 20))
+        """设置现代化文件选择页面"""
         
-        # API开关
-        self.api_enabled = BooleanVar(value=False)
-        self.api_server = None
-        
-        api_switch_frame = Frame(api_frame, bg='white')
-        api_switch_frame.pack(fill=X, pady=5)
-        
-        Checkbutton(api_switch_frame, text="启用API功能", variable=self.api_enabled, 
-                   command=self.toggle_api, bg='white').pack(side=LEFT, padx=5)
-        
-        # API地址显示
-        self.api_url_var = StringVar(value="http://localhost:8000")
-        api_url_frame = Frame(api_frame, bg='white')
-        api_url_frame.pack(fill=X, pady=5)
-        
-        Label(api_url_frame, text="API地址:", bg='white', width=12, anchor='w').pack(side=LEFT)
-        Entry(api_url_frame, textvariable=self.api_url_var, width=40, state='readonly').pack(side=LEFT, padx=5)
-        Button(api_url_frame, text="复制地址", command=self.copy_api_url).pack(side=LEFT, padx=5)
-        Button(api_url_frame, text="打开文档", command=self.open_api_docs).pack(side=LEFT)
-        
-        # API状态
-        self.api_status_var = StringVar(value="API已关闭")
-        Label(api_frame, textvariable=self.api_status_var, bg='white', fg='gray').pack()
-        
-        # 单文件选择区域
-        single_frame = LabelFrame(parent, text="单文件模式", padx=10, pady=10, bg='white')
+        # 单文件模式
+        single_frame = self.create_modern_frame(parent, "📁 单文件模式")
         single_frame.pack(fill=X, pady=(0, 20))
         
-        # 音频文件选择
-        audio_frame = Frame(single_frame, bg='white')
-        audio_frame.pack(fill=X, pady=5)
-        Label(audio_frame, text="音频文件:", bg='white', width=12, anchor='w').pack(side=LEFT)
-        self.audio_var = StringVar()
-        Entry(audio_frame, textvariable=self.audio_var, width=50).pack(side=LEFT, padx=5)
-        Button(audio_frame, text="浏览", command=self.select_audio).pack(side=LEFT)
+        # 文件选择行
+        file_rows = [
+            ("音频文件", self.audio_var, self.select_audio, "🎵"),
+            ("歌词文件", self.lrc_var, self.select_lrc, "📝"),
+            ("背景图片", self.bg_var, self.select_background, "🖼️")
+        ]
         
-        # 歌词文件选择
-        lrc_frame = Frame(single_frame, bg='white')
-        lrc_frame.pack(fill=X, pady=5)
-        Label(lrc_frame, text="歌词文件:", bg='white', width=12, anchor='w').pack(side=LEFT)
-        self.lrc_var = StringVar()
-        Entry(lrc_frame, textvariable=self.lrc_var, width=50).pack(side=LEFT, padx=5)
-        Button(lrc_frame, text="浏览", command=self.select_lrc).pack(side=LEFT)
+        for label, var, cmd, icon in file_rows:
+            row = Frame(single_frame, bg=COLORS['surface'])
+            row.pack(fill=X, pady=8)
+            
+            create_modern_label(row, f"{icon} {label}:").pack(side=LEFT)
+            entry = create_modern_entry(row, textvariable=var, width=45)
+            entry.pack(side=LEFT, padx=(10, 5), fill=X, expand=True)
+            create_modern_button(row, "浏览", cmd).pack(side=LEFT)
         
-        # 背景图片选择
-        bg_frame = Frame(single_frame, bg='white')
-        bg_frame.pack(fill=X, pady=5)
-        Label(bg_frame, text="背景图片:", bg='white', width=12, anchor='w').pack(side=LEFT)
-        self.bg_var = StringVar()
-        Entry(bg_frame, textvariable=self.bg_var, width=50).pack(side=LEFT, padx=5)
-        Button(bg_frame, text="浏览", command=self.select_background).pack(side=LEFT)
+        # 批量处理区域
+        batch_frame = self.create_modern_frame(parent, "📂 批量处理")
+        batch_frame.pack(fill=X, pady=(0, 20))
         
-        # 文件夹批量导入区域
-        folder_frame = LabelFrame(parent, text="文件夹批量导入", padx=10, pady=10, bg='white')
-        folder_frame.pack(fill=X, pady=(0, 20))
+        # 文件夹选择
+        folder_row = Frame(batch_frame, bg=COLORS['surface'])
+        folder_row.pack(fill=X, pady=8)
         
-        folder_select_frame = Frame(folder_frame, bg='white')
-        folder_select_frame.pack(fill=X, pady=5)
-        Label(folder_select_frame, text="选择文件夹:", bg='white', width=12, anchor='w').pack(side=LEFT)
-        self.folder_var = StringVar()
-        Entry(folder_select_frame, textvariable=self.folder_var, width=50).pack(side=LEFT, padx=5)
-        Button(folder_select_frame, text="浏览", command=self.select_folder).pack(side=LEFT, padx=5)
-        Button(folder_select_frame, text="扫描", command=self.scan_folder).pack(side=LEFT)
+        create_modern_label(folder_row, "📁 选择文件夹:").pack(side=LEFT)
+        folder_entry = create_modern_entry(folder_row, textvariable=self.folder_var, width=40)
+        folder_entry.pack(side=LEFT, padx=(10, 5), fill=X, expand=True)
         
-        # 文件匹配显示
-        self.file_tree = ttk.Treeview(folder_frame, columns=('audio', 'lrc', 'background'), show='headings', height=8)
-        self.file_tree.heading('audio', text='音频文件')
-        self.file_tree.heading('lrc', text='歌词文件')
-        self.file_tree.heading('background', text='背景图片')
-        self.file_tree.column('audio', width=180)
-        self.file_tree.column('lrc', width=180)
-        self.file_tree.column('background', width=120)
+        folder_btn_frame = Frame(folder_row, bg=COLORS['surface'])
+        folder_btn_frame.pack(side=LEFT)
+        create_modern_button(folder_btn_frame, "浏览", self.select_folder).pack(side=LEFT, padx=2)
+        create_modern_button(folder_btn_frame, "🔍 扫描", self.scan_folder).pack(side=LEFT, padx=2)
         
-        tree_scroll = ttk.Scrollbar(folder_frame, orient=VERTICAL, command=self.file_tree.yview)
+        # 文件列表
+        tree_frame = Frame(batch_frame, bg=COLORS['surface'])
+        tree_frame.pack(fill=BOTH, expand=True, pady=(10, 0))
+        
+        # 创建Treeview样式
+        style = ttk.Style()
+        style.configure('Modern.Treeview',
+                       background=COLORS['surface'],
+                       foreground=COLORS['text_primary'],
+                       fieldbackground=COLORS['surface'],
+                       borderwidth=0,
+                       relief='flat')
+        style.configure('Modern.Treeview.Heading',
+                       background=COLORS['background'],
+                       foreground=COLORS['text_primary'],
+                       relief='flat',
+                       font=FONTS['body'])
+        
+        self.file_tree = ttk.Treeview(tree_frame, columns=('audio', 'lrc', 'background'), 
+                                    show='headings', height=6, style='Modern.Treeview')
+        self.file_tree.heading('audio', text='🎵 音频文件')
+        self.file_tree.heading('lrc', text='📝 歌词文件')
+        self.file_tree.heading('background', text='🖼️ 背景图片')
+        self.file_tree.column('audio', width=200)
+        self.file_tree.column('lrc', width=200)
+        self.file_tree.column('background', width=150)
+        
+        # 滚动条
+        tree_scroll = ttk.Scrollbar(tree_frame, orient=VERTICAL, command=self.file_tree.yview)
         self.file_tree.configure(yscrollcommand=tree_scroll.set)
         
-        tree_frame = Frame(folder_frame, bg='white')
-        tree_frame.pack(fill=BOTH, expand=True, pady=10)
         self.file_tree.pack(side=LEFT, fill=BOTH, expand=True)
         tree_scroll.pack(side=RIGHT, fill=Y)
         
-        # 输出目录选择
-        output_frame = Frame(parent, bg='white')
-        output_frame.pack(fill=X, pady=10)
-        Label(output_frame, text="输出目录:", bg='white', width=12, anchor='w').pack(side=LEFT)
-        self.output_var = StringVar(value=str(self.output_dir))
-        Entry(output_frame, textvariable=self.output_var, width=50).pack(side=LEFT, padx=5)
-        Button(output_frame, text="浏览", command=self.select_output_dir).pack(side=LEFT)
+        # 输出目录
+        output_frame = self.create_modern_frame(parent, "📤 输出设置")
+        output_frame.pack(fill=X, pady=(0, 20))
+        
+        output_row = Frame(output_frame, bg=COLORS['surface'])
+        output_row.pack(fill=X, pady=8)
+        
+        create_modern_label(output_row, "📁 输出目录:").pack(side=LEFT)
+        output_entry = create_modern_entry(output_row, textvariable=self.output_var, width=45)
+        output_entry.pack(side=LEFT, padx=(10, 5), fill=X, expand=True)
+        create_modern_button(output_row, "浏览", self.select_output_dir).pack(side=LEFT)
         
     def setup_style_page(self, parent):
-        # 创建网格布局容器
-        container = Frame(parent, bg='white')
+        """设置现代化样式页面"""
+        
+        # 样式导入导出
+        import_frame = self.create_modern_frame(parent, "🎨 样式管理")
+        import_frame.pack(fill=X, pady=(0, 20))
+        
+        import_row = Frame(import_frame, bg=COLORS['surface'])
+        import_row.pack(fill=X, pady=8)
+        
+        create_modern_button(import_row, "📤 导出样式", self.export_style_config).pack(side=LEFT, padx=5)
+        create_modern_button(import_row, "📥 导入样式", self.import_style_config).pack(side=LEFT, padx=5)
+        
+        # 并发设置
+        concurrency_row = Frame(import_frame, bg=COLORS['surface'])
+        concurrency_row.pack(fill=X, pady=(10, 0))
+        
+        create_modern_label(concurrency_row, "⚡ 并发线程数:").pack(side=LEFT)
+        concurrency_scale = Scale(concurrency_row, from_=1, to=8, orient=HORIZONTAL, 
+                                  variable=self.concurrency_var, length=150,
+                                  command=lambda v: self.auto_save_preferences())
+        concurrency_scale.pack(side=LEFT, padx=(10, 5))
+        create_modern_label(concurrency_row, "(根据CPU核心数调整)").pack(side=LEFT)
+        
+        # 设置网格布局
+        container = Frame(parent, bg=COLORS['background'])
         container.pack(fill=BOTH, expand=True, padx=20, pady=20)
         
-        # 配置网格列权重，实现响应式布局
-        container.grid_columnconfigure(0, weight=1)
-        container.grid_columnconfigure(1, weight=1)
-        container.grid_rowconfigure(0, weight=0)
-        container.grid_rowconfigure(1, weight=0)
-        container.grid_rowconfigure(2, weight=0)
-        container.grid_rowconfigure(3, weight=0)
-        container.grid_rowconfigure(4, weight=0)
-
-        # 字体设置 - 左侧
-        font_frame = LabelFrame(container, text="字体设置", padx=15, pady=15, bg='white', relief=GROOVE)
-        font_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+        # 网格布局配置
+        container.grid_columnconfigure(0, weight=1, uniform='col')
+        container.grid_columnconfigure(1, weight=1, uniform='col')
+        
+        # 字体设置
+        font_frame = self.create_modern_frame(container, "📝 字体设置")
+        font_frame.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
         
         # 字体族
-        Label(font_frame, text="字体:", bg='white', font=('Arial', 10)).grid(row=0, column=0, sticky='w', pady=5)
-        self.font_family = StringVar(value="Microsoft YaHei")
-        font_combo = ttk.Combobox(font_frame, textvariable=self.font_family, 
+        font_row = Frame(font_frame, bg=COLORS['surface'])
+        font_row.pack(fill=X, pady=8)
+        create_modern_label(font_row, "字体:").pack(side=LEFT)
+        font_combo = ttk.Combobox(font_row, textvariable=self.font_family, 
                                  values=["Microsoft YaHei", "SimHei", "Arial", "Times New Roman", "宋体", "黑体"],
-                                 state="readonly", width=15)
-        font_combo.grid(row=0, column=1, sticky='ew', padx=5, pady=5)
+                                 state="readonly", width=15, font=FONTS['body'])
+        font_combo.pack(side=LEFT, padx=(10, 5))
+        font_combo.bind('<<ComboboxSelected>>', lambda e: self.auto_save_preferences())
         
         # 字体大小
-        Label(font_frame, text="字体大小:", bg='white', font=('Arial', 10)).grid(row=1, column=0, sticky='w', pady=5)
-        self.font_size = IntVar(value=36)
-        Scale(font_frame, from_=16, to=72, orient=HORIZONTAL, variable=self.font_size, 
-              length=120).grid(row=1, column=1, sticky='ew', padx=5, pady=5)
+        size_row = Frame(font_frame, bg=COLORS['surface'])
+        size_row.pack(fill=X, pady=8)
+        create_modern_label(size_row, "字体大小:").pack(side=LEFT)
+        size_scale = Scale(size_row, from_=16, to=72, orient=HORIZONTAL, variable=self.font_size,
+                         length=150, command=lambda v: self.auto_save_preferences())
+        size_scale.pack(side=LEFT, padx=(10, 5))
         
         # 字体颜色
-        Label(font_frame, text="字体颜色:", bg='white', font=('Arial', 10)).grid(row=2, column=0, sticky='w', pady=5)
-        color_frame = Frame(font_frame, bg='white')
-        color_frame.grid(row=2, column=1, sticky='w', padx=5, pady=5)
-        self.font_color = StringVar(value="#FFFFFF")
-        self.font_color_btn = Button(color_frame, text="选择", bg=self.font_color.get(), width=8,
-                                    command=lambda: self.choose_color(self.font_color, self.font_color_btn))
-        self.font_color_btn.pack(side=LEFT)
+        color_row = Frame(font_frame, bg=COLORS['surface'])
+        color_row.pack(fill=X, pady=8)
+        create_modern_label(color_row, "字体颜色:").pack(side=LEFT)
+        self.font_color_btn = Button(color_row, text="🎨 选择颜色", bg=self.font_color.get(), 
+                                   fg='white' if self.font_color.get() == '#000000' else 'black',
+                                   command=lambda: self.choose_color(self.font_color, self.font_color_btn))
+        self.font_color_btn.pack(side=LEFT, padx=(10, 5))
         
         # 字体样式
-        style_frame = Frame(font_frame, bg='white')
-        style_frame.grid(row=3, column=0, columnspan=2, sticky='w', pady=5)
-        self.bold_var = BooleanVar(value=True)
-        self.italic_var = BooleanVar(value=False)
-        Checkbutton(style_frame, text="粗体", variable=self.bold_var, bg='white').pack(side=LEFT, padx=5)
-        Checkbutton(style_frame, text="斜体", variable=self.italic_var, bg='white').pack(side=LEFT, padx=5)
+        style_row = Frame(font_frame, bg=COLORS['surface'])
+        style_row.pack(fill=X, pady=8)
+        bold_check = Checkbutton(style_row, text="粗体", variable=self.bold_var,
+                               command=self.auto_save_preferences, bg=COLORS['surface'])
+        bold_check.pack(side=LEFT, padx=(0, 15))
+        italic_check = Checkbutton(style_row, text="斜体", variable=self.italic_var,
+                               command=self.auto_save_preferences, bg=COLORS['surface'])
+        italic_check.pack(side=LEFT)
         
-        font_frame.grid_columnconfigure(1, weight=1)
-
-        # 描边设置 - 右侧
-        outline_frame = LabelFrame(container, text="描边设置", padx=15, pady=15, bg='white', relief=GROOVE)
-        outline_frame.grid(row=1, column=1, sticky='nsew', padx=5, pady=5)
+        # 描边设置
+        outline_frame = self.create_modern_frame(container, "🖋️ 描边设置")
+        outline_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=5)
         
         # 描边宽度
-        Label(outline_frame, text="描边宽度:", bg='white', font=('Arial', 10)).grid(row=0, column=0, sticky='w', pady=5)
-        self.outline_width = IntVar(value=3)
-        Scale(outline_frame, from_=0, to=10, orient=HORIZONTAL, variable=self.outline_width,
-              length=120).grid(row=0, column=1, sticky='ew', padx=5, pady=5)
+        outline_width_row = Frame(outline_frame, bg='#ffffff')
+        outline_width_row.pack(fill=X, pady=8)
+        self.create_modern_label(outline_width_row, "描边宽度:", font_size=10).pack(side=LEFT)
+        outline_scale = Scale(outline_width_row, from_=0, to=10, orient=HORIZONTAL,
+                            variable=self.outline_width, length=150,
+                            command=lambda v: self.auto_save_preferences())
+        outline_scale.pack(side=LEFT, padx=(10, 5))
         
         # 描边颜色
-        Label(outline_frame, text="描边颜色:", bg='white', font=('Arial', 10)).grid(row=1, column=0, sticky='w', pady=5)
-        color_frame2 = Frame(outline_frame, bg='white')
-        color_frame2.grid(row=1, column=1, sticky='w', padx=5, pady=5)
-        self.outline_color = StringVar(value="#000000")
-        self.outline_color_btn = Button(color_frame2, text="选择", bg=self.outline_color.get(), width=8,
-                                       command=lambda: self.choose_color(self.outline_color, self.outline_color_btn))
-        self.outline_color_btn.pack(side=LEFT)
+        outline_color_row = Frame(outline_frame, bg='#ffffff')
+        outline_color_row.pack(fill=X, pady=8)
+        self.create_modern_label(outline_color_row, "描边颜色:", font_size=10).pack(side=LEFT)
+        self.outline_color_btn = Button(outline_color_row, text="🎨 选择颜色", 
+                                      bg=self.outline_color.get(),
+                                      fg='white' if self.outline_color.get() == '#000000' else 'black',
+                                      command=lambda: [self.choose_color(self.outline_color, self.outline_color_btn), 
+                                                       self.auto_save_preferences()])
+        self.outline_color_btn.pack(side=LEFT, padx=(10, 5))
         
-        outline_frame.grid_columnconfigure(1, weight=1)
-
-        # 位置设置 - 左侧
-        position_frame = LabelFrame(container, text="位置设置", padx=15, pady=15, bg='white', relief=GROOVE)
-        position_frame.grid(row=2, column=0, sticky='nsew', padx=5, pady=5)
+        # 位置设置
+        position_frame = self.create_modern_frame(container, "📍 位置设置")
+        position_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
         
         # 底部边距
-        Label(position_frame, text="底部边距:", bg='white', font=('Arial', 10)).grid(row=0, column=0, sticky='w', pady=5)
-        self.margin_bottom = IntVar(value=50)
-        Scale(position_frame, from_=0, to=200, orient=HORIZONTAL, variable=self.margin_bottom,
-              length=120).grid(row=0, column=1, sticky='ew', padx=5, pady=5)
+        margin_row = Frame(position_frame, bg='#ffffff')
+        margin_row.pack(fill=X, pady=8)
+        self.create_modern_label(margin_row, "底部边距:", font_size=10).pack(side=LEFT)
+        margin_scale = Scale(margin_row, from_=0, to=200, orient=HORIZONTAL,
+                           variable=self.margin_bottom, length=150,
+                           command=lambda v: self.auto_save_preferences())
+        margin_scale.pack(side=LEFT, padx=(10, 5))
         
-        position_frame.grid_columnconfigure(1, weight=1)
-
-        # 特效设置 - 右侧
-        effect_frame = LabelFrame(container, text="特效设置", padx=15, pady=15, bg='white', relief=GROOVE)
-        effect_frame.grid(row=2, column=1, sticky='nsew', padx=5, pady=5)
+        # 特效设置
+        effect_frame = self.create_modern_frame(container, "✨ 特效设置")
+        effect_frame.grid(row=1, column=1, sticky='nsew', padx=5, pady=5)
         
         # 淡入时间
-        Label(effect_frame, text="淡入时间(ms):", bg='white', font=('Arial', 10)).grid(row=0, column=0, sticky='w', pady=5)
-        self.fade_in = IntVar(value=500)
-        Scale(effect_frame, from_=0, to=2000, orient=HORIZONTAL, variable=self.fade_in,
-              length=120).grid(row=0, column=1, sticky='ew', padx=5, pady=5)
+        fade_in_row = Frame(effect_frame, bg='#ffffff')
+        fade_in_row.pack(fill=X, pady=8)
+        self.create_modern_label(fade_in_row, "淡入时间(ms):", font_size=10).pack(side=LEFT)
+        fade_in_scale = Scale(fade_in_row, from_=0, to=2000, orient=HORIZONTAL,
+                            variable=self.fade_in, length=150,
+                            command=lambda v: self.auto_save_preferences())
+        fade_in_scale.pack(side=LEFT, padx=(10, 5))
         
         # 淡出时间
-        Label(effect_frame, text="淡出时间(ms):", bg='white', font=('Arial', 10)).grid(row=1, column=0, sticky='w', pady=5)
-        self.fade_out = IntVar(value=500)
-        Scale(effect_frame, from_=0, to=2000, orient=HORIZONTAL, variable=self.fade_out,
-              length=120).grid(row=1, column=1, sticky='ew', padx=5, pady=5)
+        fade_out_row = Frame(effect_frame, bg='#ffffff')
+        fade_out_row.pack(fill=X, pady=8)
+        self.create_modern_label(fade_out_row, "淡出时间(ms):", font_size=10).pack(side=LEFT)
+        fade_out_scale = Scale(fade_out_row, from_=0, to=2000, orient=HORIZONTAL,
+                             variable=self.fade_out, length=150,
+                             command=lambda v: self.auto_save_preferences())
+        fade_out_scale.pack(side=LEFT, padx=(10, 5))
         
-        effect_frame.grid_columnconfigure(1, weight=1)
-
-        # 背景设置 - 左侧
-        bg_frame = LabelFrame(container, text="背景设置", padx=15, pady=15, bg='white', relief=GROOVE)
-        bg_frame.grid(row=3, column=0, sticky='nsew', padx=5, pady=5)
+        # 背景设置
+        bg_frame = self.create_modern_frame(container, "🎨 背景设置")
+        bg_frame.grid(row=2, column=0, sticky='nsew', padx=5, pady=5)
         
         # 背景颜色
-        Label(bg_frame, text="背景颜色:", bg='white', font=('Arial', 10)).grid(row=0, column=0, sticky='w', pady=5)
-        color_frame3 = Frame(bg_frame, bg='white')
-        color_frame3.grid(row=0, column=1, sticky='w', padx=5, pady=5)
-        self.bg_color = StringVar(value="#000000")
-        self.bg_color_btn = Button(color_frame3, text="选择", bg=self.bg_color.get(), width=8,
-                                  command=lambda: self.choose_color(self.bg_color, self.bg_color_btn))
-        self.bg_color_btn.pack(side=LEFT)
+        bg_color_row = Frame(bg_frame, bg='#ffffff')
+        bg_color_row.pack(fill=X, pady=8)
+        self.create_modern_label(bg_color_row, "背景颜色:", font_size=10).pack(side=LEFT)
+        self.bg_color_btn = Button(bg_color_row, text="🎨 选择颜色", 
+                                 bg=self.bg_color.get(),
+                                 fg='white' if self.bg_color.get() == '#000000' else 'black',
+                                 command=lambda: [self.choose_color(self.bg_color, self.bg_color_btn),
+                                                  self.auto_save_preferences()])
+        self.bg_color_btn.pack(side=LEFT, padx=(10, 5))
         
-        bg_frame.grid_columnconfigure(1, weight=1)
-
-        # 视频尺寸 - 右侧
-        size_frame = LabelFrame(container, text="视频尺寸", padx=15, pady=15, bg='white', relief=GROOVE)
-        size_frame.grid(row=3, column=1, sticky='nsew', padx=5, pady=5)
+        # 视频尺寸
+        size_frame = self.create_modern_frame(container, "📐 视频尺寸")
+        size_frame.grid(row=2, column=1, sticky='nsew', padx=5, pady=5)
         
         # 分辨率
-        Label(size_frame, text="分辨率:", bg='white', font=('Arial', 10)).grid(row=0, column=0, sticky='w', pady=5)
-        self.resolution = StringVar(value="1920x1080")
-        ttk.Combobox(size_frame, textvariable=self.resolution, 
-                    values=["1920x1080", "1280x720", "1024x768", "800x600"], 
-                    state="readonly", width=15).grid(row=0, column=1, sticky='w', padx=5, pady=5)
-        
-        size_frame.grid_columnconfigure(1, weight=1)
-
-        # 样式导入导出 - 全宽（置顶）
-        import_export_frame = LabelFrame(container, text="样式导入导出", padx=15, pady=15, bg='white', relief=GROOVE)
-        import_export_frame.grid(row=0, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
-        
-        import_export_btn_frame = Frame(import_export_frame, bg='white')
-        import_export_btn_frame.pack(fill=X, pady=5)
-
-        Button(import_export_btn_frame, text="📤 导出样式", 
-               command=self.export_style_config, 
-               bg='#28a745', fg='white', width=12).pack(side=LEFT, padx=5)
-        
-        Button(import_export_btn_frame, text="📥 导入样式", 
-               command=self.import_style_config, 
-               bg='#007bff', fg='white', width=12).pack(side=LEFT, padx=5)
-
-        # 并发设置
-        concurrency_frame = Frame(import_export_frame, bg='white')
-        concurrency_frame.pack(fill=X, pady=(10, 0))
-        
-        Label(concurrency_frame, text="并发线程数:", bg='white').pack(side=LEFT)
-        self.concurrency_var = IntVar(value=2)
-        Scale(concurrency_frame, from_=1, to=8, orient=HORIZONTAL, variable=self.concurrency_var,
-              length=120).pack(side=LEFT, padx=(5, 10))
-        Label(concurrency_frame, text="(根据CPU核心数调整)", bg='white', fg='#666', font=('Arial', 9)).pack(side=LEFT)
+        size_row = Frame(size_frame, bg='#ffffff')
+        size_row.pack(fill=X, pady=8)
+        self.create_modern_label(size_row, "分辨率:", font_size=10).pack(side=LEFT)
+        resolution_combo = ttk.Combobox(size_row, textvariable=self.resolution,
+                                     values=["1920x1080", "1280x720", "1024x768", "800x600"],
+                                     state="readonly", width=15, font=('Segoe UI', 10))
+        resolution_combo.pack(side=LEFT, padx=(10, 5))
+        resolution_combo.bind('<<ComboboxSelected>>', lambda e: self.auto_save_preferences())
         
 
 
@@ -343,6 +879,25 @@ class LyricsVideoGenerator:
         #       bg='white', fg='#666', font=('Arial', 9)).pack(pady=(5, 0))
         
     def setup_batch_page(self, parent):
+        # 创建滚动容器
+        canvas = Canvas(parent, bg='white')
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = Frame(canvas, bg='white')
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # 使用scrollable_frame作为容器
+        parent = scrollable_frame
+        
         # 控制按钮
         control_frame = Frame(parent, bg='white')
         control_frame.pack(fill=X, pady=(0, 20))
@@ -364,7 +919,7 @@ class LyricsVideoGenerator:
         
         # 进度显示区域
         progress_frame = LabelFrame(parent, text="处理进度", padx=10, pady=10, bg='white')
-        progress_frame.pack(fill=BOTH, expand=True)
+        progress_frame.pack(fill=BOTH, expand=True, pady=(0, 10))
         
         # 当前文件信息
         current_file_frame = Frame(progress_frame, bg='white')
@@ -487,6 +1042,7 @@ class LyricsVideoGenerator:
             self.file_tree.tag_configure('missing', background='#ffcccc')
             
             self.log(f"扫描完成：找到 {len(file_pairs)} 个有效的音频-歌词配对，{len(missing_files)} 个文件缺少歌词")
+            self.update_debug_status(f"扫描完成: {len(file_pairs)}个有效文件", "success")
             
             # 显示详细的文件配对信息
             if file_pairs:
@@ -510,6 +1066,8 @@ class LyricsVideoGenerator:
             
         except Exception as e:
             messagebox.showerror("错误", f"扫描文件夹时出错：{str(e)}")
+            self.update_debug_status("扫描失败", "error")
+            logger.error(f"扫描文件夹失败: {e}")
             
     def get_config(self):
         width, height = self.resolution.get().split('x')
@@ -531,7 +1089,8 @@ class LyricsVideoGenerator:
             'fade_out': self.fade_out.get(),
             'shadow_color': '#000000',
             'shadow_offset': 2,
-            'concurrency': self.concurrency_var.get()
+            'concurrency': self.concurrency_var.get(),
+            'artist': None  # 可以从文件名解析艺术家信息
         }
         
     def export_style_config(self):
@@ -582,6 +1141,9 @@ class LyricsVideoGenerator:
                 
                 # 应用配置到界面
                 self.apply_config_to_ui(config)
+                
+                # 保存到配置文件
+                self.save_user_preferences()
                 
                 messagebox.showinfo("成功", "样式配置已导入并应用")
                 self.log(f"样式配置已导入：{filename}")
@@ -679,8 +1241,23 @@ class LyricsVideoGenerator:
             
         bg_image_path = self.bg_var.get() if self.bg_var.get() else None
         config = self.get_config()
-        print(config)
-        output_path = self.output_dir / f"{Path(audio_path).stem}.mp4"
+        
+        # 设置环境变量用于AI标题生成
+        if self.ai_title_enabled.get() and self.openai_api_key.get():
+            import os
+            os.environ['OPENAI_API_KEY'] = self.openai_api_key.get()
+        
+        # 使用AI标题时，先生成标题再构造输出路径
+        if self.ai_title_enabled.get():
+            from utils.ai_title_generator import generate_video_title
+            song_name = Path(audio_path).stem
+            artist = config.get('artist', None)
+            ai_title = generate_video_title(song_name, artist)
+            # 清理文件名中的特殊字符
+            safe_title = "".join(c for c in ai_title if c.isalnum() or c in (' ', '-', '_', '.', '《', '》', '【', '】', '（', '）', '！', '？', '~')).rstrip()
+            output_path = self.output_dir / f"{safe_title}.mp4"
+        else:
+            output_path = self.output_dir / f"{Path(audio_path).stem}.mp4"
         
         # 更新UI状态
         self.single_generate_btn.config(state=DISABLED)
@@ -689,21 +1266,44 @@ class LyricsVideoGenerator:
         self.total_progress_bar['maximum'] = 1
         self.total_progress_bar['value'] = 0
         
+        def progress_callback(current, total, message=""):
+            # 更新进度条
+            if total > 0:
+                progress = int((current / total) * 100)
+                self.current_file_progress_bar['value'] = progress
+                self.current_file_progress_var.set(f"{progress}%")
+            if message:
+                self.status_var.set(message)
+            # 允许GUI更新
+            self.root.update_idletasks()
+
         def generate():
             try:
-                success, result = self.video_generator.generate_video(audio_path, lrc_path, config, bg_image_path, output_path)
+                # 创建新的视频生成器实例
+                generator = VideoGenerator(progress_callback)
+                success, result = generator.generate_video(
+                    audio_path, lrc_path, config, bg_image_path, output_path, 
+                    use_ai_title=self.ai_title_enabled.get()
+                )
                 if success:
                     self.log(f"✅ 视频生成成功：{result}")
                     self.status_var.set("生成完成")
-                    self.total_progress_bar['value'] = 1
+                    self.current_file_progress_bar['value'] = 100
+                    self.current_file_progress_var.set("100%")
                     messagebox.showinfo("成功", f"视频已保存到：{result}")
                 else:
                     self.log(f"❌ 单个生成失败：{result}")
                     self.status_var.set("单个生成失败")
                     messagebox.showerror("错误", f"单个生成失败：{result}")
+            except Exception as e:
+                self.log(f"❌ 生成过程异常：{str(e)}")
+                self.status_var.set("生成异常")
+                messagebox.showerror("错误", f"生成过程异常：{str(e)}")
             finally:
                 self.single_generate_btn.config(state=NORMAL)
                 self.current_file_var.set("无")
+                self.current_file_progress_bar['value'] = 0
+                self.current_file_progress_var.set("0%")
                 
         threading.Thread(target=generate, daemon=True).start()
         
@@ -728,6 +1328,10 @@ class LyricsVideoGenerator:
             config = self.get_config()
             success_count = 0
             total_files = len(self.file_pairs)
+            
+            # 设置环境变量用于AI标题生成
+            if self.ai_title_enabled.get() and self.openai_api_key.get():
+                os.environ['OPENAI_API_KEY'] = self.openai_api_key.get()
             
             # 使用用户配置的并发度
             max_workers = min(8, max(1, config.get('concurrency', 2)))
@@ -809,20 +1413,57 @@ class LyricsVideoGenerator:
         try:
             # 创建独立的视频生成器实例（线程安全）
             from core.video_generator import VideoGenerator
+            from utils.ai_title_generator import generate_video_title
             
             # 记录使用的文件路径，确保每个文件使用正确的资源
             print(f"📝 处理文件 {file_num}/{total_files}:")
             print(f"   音频: {audio_path}")
             print(f"   歌词: {lrc_path}")
             print(f"   背景: {bg_image_path}")
-            print(f"   输出: {output_path}")
+            
+            # 处理AI标题
+            final_output_path = output_path
+            if self.ai_title_enabled.get():
+                try:
+                    song_name = audio_path.stem
+                    artist = config.get('artist', None)
+                    ai_title = generate_video_title(song_name, artist)
+                    # 清理文件名中的特殊字符，但保留中文符号
+                    safe_title = "".join(c for c in ai_title if c.isalnum() or c in (' ', '-', '_', '.', '《', '》', '【', '】', '（', '）', '！', '？', '~')).rstrip()
+                    final_output_path = output_path.parent / f"{safe_title}.mp4"
+                    print(f"   AI标题: {safe_title}")
+                    print(f"   输出: {final_output_path}")
+                except Exception as e:
+                    print(f"   AI标题生成失败，使用原文件名: {e}")
+                    final_output_path = output_path
+            else:
+                print(f"   输出: {final_output_path}")
             
             def progress_callback(current, total, message=""):
-                # 这里可以添加更细粒度的进度显示
-                pass
+                # 使用after方法确保线程安全地更新GUI
+                def update_gui():
+                    progress_percent = int((current / total) * 100) if total > 0 else 0
+                    self.current_file_progress_var.set(f"{progress_percent}%")
+                    self.current_file_progress_bar['value'] = progress_percent
+                    
+                    # 更新状态信息
+                    if message:
+                        self.current_file_var.set(f"[{file_num}/{total_files}] {audio_path.name} - {message}")
+                    else:
+                        self.current_file_var.set(f"[{file_num}/{total_files}] {audio_path.name} ({progress_percent}%)")
+                
+                # 使用after方法在主线程中更新GUI
+                try:
+                    self.root.after(0, update_gui)
+                except:
+                    # 如果root已被销毁，直接返回
+                    pass
             
             generator = VideoGenerator(progress_callback)
-            return generator.generate_video(audio_path, lrc_path, config, bg_image_path, output_path)
+            return generator.generate_video(
+                audio_path, lrc_path, config, bg_image_path, final_output_path,
+                use_ai_title=self.ai_title_enabled.get()
+            )
             
         except Exception as e:
             return False, str(e)
@@ -835,9 +1476,8 @@ class LyricsVideoGenerator:
     def on_closing(self):
         """窗口关闭事件处理"""
         try:
-            # 停止API服务器
-            if self.api_server and self.api_enabled.get():
-                self.stop_api_server()
+            # 保存用户偏好设置
+            self.save_user_preferences()
             
             # 设置停止标志
             self.video_generator.set_stop_flag(True)
@@ -847,170 +1487,89 @@ class LyricsVideoGenerator:
             
             # 延迟关闭，确保进程清理完成
             self.root.after(100, self.root.destroy)
-        except:
+        except Exception as e:
+            print(f"关闭窗口时出错: {e}")
             # 无论如何都要关闭窗口
             self.root.destroy()
     
-    def toggle_api(self):
-        """切换API功能开关"""
-        if self.api_enabled.get():
-            self.start_api_server()
-        else:
-            self.stop_api_server()
+    def toggle_ai_title(self):
+        """切换AI标题生成功能"""
+        if self.ai_title_enabled.get():
+            self.show_api_key_dialog()
+        self.auto_save_preferences()
     
-    def start_api_server(self):
-        """启动API服务器"""
-        try:
-            from flask import Flask, request, jsonify
-            import threading
-            
-            self.app = Flask(__name__)
-            self.app.config['JSON_AS_ASCII'] = False
-            
-            @self.app.route('/api/generate', methods=['POST'])
-            def api_generate():
-                """API生成接口"""
-                try:
-                    data = request.json
-                    audio_path = data.get('audio_path')
-                    lrc_path = data.get('lrc_path')
-                    bg_image_path = data.get('bg_image_path')
-                    output_path = data.get('output_path')
-                    config = data.get('config', {})
-                    
-                    if not audio_path or not lrc_path:
-                        return jsonify({"error": "缺少音频或歌词文件路径"}), 400
-                    
-                    # 使用当前样式配置
-                    current_config = self.get_config()
-                    current_config.update(config)
-                    
-                    # 生成视频
-                    success, message = self.video_generator.generate_video(
-                        audio_path, lrc_path, current_config, bg_image_path, output_path
-                    )
-                    
-                    if success:
-                        return jsonify({"success": True, "output_path": message})
-                    else:
-                        return jsonify({"error": message}), 500
-                        
-                except Exception as e:
-                    return jsonify({"error": str(e)}), 500
-            
-            @self.app.route('/api/status', methods=['GET'])
-            def api_status():
-                """获取API状态"""
-                return jsonify({
-                    "status": "running",
-                    "supported_endpoints": [
-                        "/api/generate",
-                        "/api/status",
-                        "/api/config",
-                        "/api/styles"
-                    ]
-                })
-            
-            @self.app.route('/api/config', methods=['GET', 'POST'])
-            def api_config():
-                """获取或设置配置"""
-                if request.method == 'GET':
-                    return jsonify(self.get_config())
-                else:
-                    # 更新配置（待实现）
-                    return jsonify({"message": "配置更新功能待实现"})
-            
-            @self.app.route('/api/styles', methods=['GET'])
-            def api_styles():
-                """获取可用样式"""
-                return jsonify({
-                    "styles": ["default", "modern"],
-                    "current": "default"
-                })
-            
-            # 启动服务器
-            def run_server():
-                self.app.run(host='0.0.0.0', port=8000, debug=False, use_reloader=False)
-            
-            self.api_server = threading.Thread(target=run_server, daemon=True)
-            self.api_server.start()
-            
-            self.api_status_var.set("API运行中 (端口: 8000)")
-            print("API服务器已启动")
-            
-        except ImportError:
-            messagebox.showerror("错误", "需要安装Flask库: pip install flask")
-            self.api_enabled.set(False)
-        except Exception as e:
-            messagebox.showerror("错误", f"启动API服务器失败: {e}")
-            self.api_enabled.set(False)
-    
-    def stop_api_server(self):
-        """停止API服务器"""
-        try:
-            if hasattr(self, 'app'):
-                # 关闭Flask服务器
-                import requests
-                try:
-                    requests.post('http://localhost:8000/shutdown', timeout=1)
-                except:
-                    pass
-            
-            self.api_status_var.set("API已关闭")
-            print("API服务器已停止")
-            
-        except Exception as e:
-            print(f"停止API服务器时出错: {e}")
-    
-    def copy_api_url(self):
-        """复制API地址到剪贴板"""
-        try:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(self.api_url_var.get())
-            messagebox.showinfo("提示", "API地址已复制到剪贴板")
-        except Exception as e:
-            messagebox.showerror("错误", f"复制失败: {e}")
-    
-    def open_api_docs(self):
-        """打开API文档"""
-        docs_text = """
-歌词视频生成器 API 文档
-
-基础URL: http://localhost:8000
-
-端点说明:
-
-1. POST /api/generate
-   生成歌词视频
-   参数:
-   - audio_path: 音频文件路径
-   - lrc_path: 歌词文件路径
-   - bg_image_path: 背景图片路径 (可选)
-   - output_path: 输出文件路径 (可选)
-   - config: 样式配置 (可选)
-
-2. GET /api/status
-   获取API状态
-
-3. GET /api/config
-   获取当前配置
-
-4. GET /api/styles
-   获取可用样式
-
-示例请求:
-curl -X POST http://localhost:8000/api/generate \\
-  -H "Content-Type: application/json" \\
-  -d '{"audio_path": "song.mp3", "lrc_path": "song.lrc"}'
-        """
+    def show_api_key_dialog(self):
+        """显示OpenAI API密钥输入对话框"""
+        dialog = Toplevel(self.root)
+        dialog.title("OpenAI API密钥设置")
+        dialog.geometry("400x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
         
-        # 创建文档窗口
-        docs_window = Toplevel(self.root)
-        docs_window.title("API文档")
-        docs_window.geometry("600x500")
-        docs_window.configure(bg='white')
+        # 居中显示
+        dialog.geometry(f"+{self.root.winfo_x() + 100}+{self.root.winfo_y() + 100}")
         
-        text_widget = ScrolledText(docs_window, wrap=WORD, padx=10, pady=10)
-        text_widget.pack(fill=BOTH, expand=True)
-        text_widget.insert('1.0', docs_text)
-        text_widget.configure(state='disabled')
+        # 设置样式
+        dialog.configure(bg=COLORS['background'])
+        
+        # 标题
+        title_label = Label(dialog, text="🤖 OpenAI API密钥", 
+                           font=FONTS['subtitle'], bg=COLORS['background'], 
+                           fg=COLORS['text_primary'])
+        title_label.pack(pady=(20, 10))
+        
+        # 说明文字
+        hint_label = Label(dialog, text="请输入您的OpenAI API密钥：", 
+                          font=FONTS['body'], bg=COLORS['background'], 
+                          fg=COLORS['text_secondary'])
+        hint_label.pack(pady=(0, 10))
+        
+        # 输入框
+        api_key_entry = Entry(dialog, textvariable=self.openai_api_key, 
+                            font=FONTS['body'], width=40, show="*")
+        api_key_entry.pack(pady=(0, 20), padx=20)
+        api_key_entry.focus()
+        
+        # 按钮区域
+        btn_frame = Frame(dialog, bg=COLORS['background'])
+        btn_frame.pack(pady=(0, 20))
+        
+        def save_and_close():
+            api_key = self.openai_api_key.get().strip()
+            if api_key:
+                # 验证API密钥格式（支持OpenAI和OpenRouter）
+                import re
+                is_valid = False
+                
+                # OpenAI格式：sk- + 48字符
+                openai_pattern = r'^sk-[a-zA-Z0-9]{48}$'
+                # OpenRouter格式：sk-or-v1- + 64十六进制字符
+                openrouter_pattern = r'^sk-or-v1-[a-f0-9]{64}$'
+                
+                if re.match(openai_pattern, api_key):
+                    is_valid = True
+                elif re.match(openrouter_pattern, api_key):
+                    is_valid = True
+                
+                if not is_valid:
+                    messagebox.showwarning("格式错误", 
+                        "API密钥格式不正确！\n\n"
+                        "支持的格式：\n"
+                        "• OpenAI: sk-开头，后面跟48个字母数字字符\n"
+                        "• OpenRouter: sk-or-v1-开头，后面跟64个十六进制字符\n\n"
+                        "例如：\n"
+                        "sk-abcdefghijklmnopqrstuvwxyz123456\n")
+                    return
+            
+            self.auto_save_preferences()
+            dialog.destroy()
+        
+        def cancel():
+            self.ai_title_enabled.set(False)
+            dialog.destroy()
+        
+        create_modern_button(btn_frame, "保存", save_and_close, 'primary').pack(side=LEFT, padx=5)
+        create_modern_button(btn_frame, "取消", cancel, 'secondary').pack(side=LEFT, padx=5)
+        
+        # 绑定回车键
+        api_key_entry.bind('<Return>', lambda e: save_and_close())
