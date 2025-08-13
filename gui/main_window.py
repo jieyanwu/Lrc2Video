@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 class LyricsVideoGenerator:
     def __init__(self, root):
         self.root = root
-        self.root.title("🎵 歌词视频生成器")
-        self.root.geometry("1000x750")
+        self.root.title("歌词视频生成器")
+        self.root.geometry("1000x800")
         self.root.configure(bg="#f5f5f5")
         self.root.option_add('*Font', ('Segoe UI', 10))
         
@@ -109,14 +109,14 @@ class LyricsVideoGenerator:
         main_frame = Frame(self.root, bg=COLORS['background'])
         main_frame.pack(fill=BOTH, expand=True, padx=0, pady=0)
         
-        # 顶部标题栏 - 渐变效果
-        header_frame = Frame(main_frame, bg=COLORS['primary'], height=80)
-        header_frame.pack(fill=X)
-        header_frame.pack_propagate(False)
+        # # 顶部标题栏 - 渐变效果
+        # header_frame = Frame(main_frame, bg=COLORS['primary'], height=80)
+        # header_frame.pack(fill=X)
+        # header_frame.pack_propagate(False)
         
-        title_label = Label(header_frame, text="🎵 歌词视频生成器", 
-                           font=FONTS['title'], bg=COLORS['primary'], fg='white')
-        title_label.pack(pady=20)
+        # title_label = Label(header_frame, text="🎵 歌词视频生成器", 
+        #                    font=FONTS['title'], bg=COLORS['primary'], fg='white')
+        # title_label.pack(pady=20)
         
         # 内容区域
         content_frame = Frame(main_frame, bg=COLORS['background'], padx=30, pady=20)
@@ -167,9 +167,9 @@ class LyricsVideoGenerator:
         # 文件菜单
         file_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="文件", menu=file_menu)
-        file_menu.add_command(label="新建项目", command=self.new_project)
-        file_menu.add_command(label="打开项目", command=self.open_project)
-        file_menu.add_separator()
+        # file_menu.add_command(label="新建项目", command=self.new_project)
+        # file_menu.add_command(label="打开项目", command=self.open_project)
+        # file_menu.add_separator()  横线
         file_menu.add_command(label="退出", command=self.on_closing)
         
         # 设置菜单
@@ -193,25 +193,25 @@ class LyricsVideoGenerator:
         except Exception as e:
             messagebox.showerror("错误", f"无法打开AI配置：{str(e)}")
     
-    def new_project(self):
-        """新建项目"""
-        # 清空当前选择
-        self.audio_var.set("")
-        self.lrc_var.set("")
-        self.bg_var.set("")
-        self.folder_var.set("")
+    # def new_project(self):
+    #     """新建项目"""
+    #     # 清空当前选择
+    #     self.audio_var.set("")
+    #     self.lrc_var.set("")
+    #     self.bg_var.set("")
+    #     self.folder_var.set("")
         
-        # 清空文件列表
-        for item in self.file_tree.get_children():
-            self.file_tree.delete(item)
-        self.file_pairs.clear()
+    #     # 清空文件列表
+    #     for item in self.file_tree.get_children():
+    #         self.file_tree.delete(item)
+    #     self.file_pairs.clear()
         
-        self.log("已创建新项目")
+    #     self.log("已创建新项目")
     
-    def open_project(self):
-        """打开项目"""
-        # 这里可以添加项目文件支持
-        messagebox.showinfo("提示", "项目文件功能开发中...")
+    # def open_project(self):
+    #     """打开项目"""
+    #     # 这里可以添加项目文件支持
+    #     messagebox.showinfo("提示", "项目文件功能开发中...")
     
     def open_preferences(self):
         """打开首选项"""
@@ -221,22 +221,22 @@ class LyricsVideoGenerator:
         """显示帮助"""
         help_text = """🎵 歌词视频生成器使用说明
 
-1. 文件选择
-   • 单个文件：选择音频文件、歌词文件和背景图片
-   • 批量处理：选择文件夹自动扫描配对文件
+        1. 文件选择
+        • 单个文件：选择音频文件、歌词文件和背景图片
+        • 批量处理：选择文件夹自动扫描配对文件
 
-2. 样式设置
-   • 调整字体、颜色、大小等参数
-   • 预览效果并保存样式配置
+        2. 样式设置
+        • 调整字体、颜色、大小等参数
+        • 预览效果并保存样式配置
 
-3. AI标题生成
-   • 在设置中配置AI标题功能
-   • 支持OpenAI、OpenRouter、Moonshot AI
-   • 自动为视频生成吸引人的标题
+        3. AI标题生成
+        • 在设置中配置AI标题功能
+        • 支持OpenAI、OpenRouter、Moonshot AI
+        • 自动为视频生成吸引人的标题
 
-4. 开始生成
-   • 点击生成按钮开始处理
-   • 实时查看进度和日志"""
+        4. 开始生成
+        • 点击生成按钮开始处理
+        • 实时查看进度和日志"""
         
         messagebox.showinfo("使用说明", help_text)
     
@@ -244,17 +244,16 @@ class LyricsVideoGenerator:
         """显示关于信息"""
         about_text = """🎵 歌词视频生成器 v2.1
 
-一个现代化的歌词视频生成工具
-支持AI智能标题生成和批量处理
+    一个现代化的歌词视频生成工具
+    支持AI智能标题生成和批量处理
 
-功能特点：
-• 支持多种音频格式
-• 智能歌词同步
-• AI标题生成
-• 批量处理
-• 现代化界面
+    功能特点：
+    • 支持多种音频格式
+    • 智能歌词同步
+    • AI标题生成
+    • 批量处理
 
-© 2024 歌词视频生成器"""
+    © 2025 - 歌词视频生成器"""
         
         messagebox.showinfo("关于", about_text)
     
@@ -701,13 +700,54 @@ class LyricsVideoGenerator:
         output_entry.pack(side=LEFT, padx=(10, 5), fill=X, expand=True)
         create_modern_button(output_row, "浏览", self.select_output_dir).pack(side=LEFT)
         
+    def get_system_fonts(self):
+        """获取系统中已安装的字体列表"""
+        try:
+            import matplotlib.font_manager as fm
+            print(f"Fonts: {fm.findSystemFonts()}")
+            # 获取系统中所有字体
+            font_list = fm.findSystemFonts(fontpaths=None, fontext='ttf')
+            
+            # 提取字体名称（去除路径和扩展名）
+            fonts = []
+            for font_path in font_list:
+                try:
+                    font_prop = fm.FontProperties(fname=font_path)
+                    font_name = font_prop.get_name()
+                    if font_name and font_name not in fonts:
+                        fonts.append(font_name)
+                except:
+                    # 如果无法获取字体信息，使用文件名
+                    font_name = os.path.basename(font_path).replace('.ttf', '').replace('.TTF', '')
+                    if font_name and font_name not in fonts:
+                        fonts.append(font_name)
+            
+            # 排序并返回
+            fonts.sort()
+            
+            # 确保包含一些常用中文字体
+            common_fonts = ["Microsoft YaHei", "SimHei", "SimSun", "KaiTi", "FangSong", "Arial", "Times New Roman"]
+            for font in common_fonts:
+                if font not in fonts:
+                    fonts.insert(0, font)
+            
+            return fonts[:60]  # 限制数量避免列表过长
+            
+        except ImportError:
+            # 如果没有matplotlib，返回常用字体列表
+            return ["Microsoft YaHei", "SimHei", "SimSun", "KaiTi", "FangSong", 
+                   "Arial", "Times New Roman", "Helvetica", "Courier New", "宋体", "黑体"]
+        except Exception as e:
+            print(f"获取系统字体失败: {e}")
+            return ["Microsoft YaHei", "SimHei", "Arial", "Times New Roman", "宋体", "黑体"]
+
     def setup_style_page(self, parent):
         """设置现代化样式页面"""
         
         # 样式导入导出
         import_frame = self.create_modern_frame(parent, "🎨 样式管理")
         import_frame.pack(fill=X, pady=(0, 20))
-        
+
         import_row = Frame(import_frame, bg=COLORS['surface'])
         import_row.pack(fill=X, pady=8)
         
@@ -737,13 +777,16 @@ class LyricsVideoGenerator:
         font_frame = self.create_modern_frame(container, "📝 字体设置")
         font_frame.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
         
+        # 获取系统字体
+        system_fonts = self.get_system_fonts()
+        
         # 字体族
         font_row = Frame(font_frame, bg=COLORS['surface'])
         font_row.pack(fill=X, pady=8)
         create_modern_label(font_row, "字体:").pack(side=LEFT)
         font_combo = ttk.Combobox(font_row, textvariable=self.font_family, 
-                                 values=["Microsoft YaHei", "SimHei", "Arial", "Times New Roman", "宋体", "黑体"],
-                                 state="readonly", width=15, font=FONTS['body'])
+                                 values=system_fonts,
+                                 state="readonly", width=20, font=FONTS['body'])
         font_combo.pack(side=LEFT, padx=(10, 5))
         font_combo.bind('<<ComboboxSelected>>', lambda e: self.auto_save_preferences())
         

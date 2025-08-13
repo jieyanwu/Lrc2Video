@@ -2,6 +2,12 @@
 pysubs2>=1.6.1
 openai>=1.0.0
 
+# 可选依赖（根据需要安装）
+ requests 
+ #- 用于网络请求
+ matplotlib 
+ #- 用于获取系统字体列表（可选）
+
 # 标准库（通常不需要安装）
 # pathlib - Python 3.4+ 内置
 # tkinter - Python 3.x 内置
@@ -13,6 +19,3 @@ openai>=1.0.0
 # platform - Python 标准库
 # datetime - Python 标准库
 # threading - Python 标准库
-
-# 可选依赖（根据需要安装）
-# requests - 用于网络请求

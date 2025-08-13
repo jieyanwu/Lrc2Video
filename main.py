@@ -98,8 +98,31 @@ def main():
         
         # 设置窗口图标和样式
         try:
-            root.iconbitmap(default='icon.ico')
-            logger.info("🎨 窗口图标加载成功")
+            # 优先使用ICO格式图标（Windows兼容性最好）
+            ico_path = os.path.join(os.path.dirname(__file__), 'icon.ico')
+            png_path = os.path.join(os.path.dirname(__file__), 'icon.png')
+            
+            if os.path.exists(ico_path):
+                # 使用ICO图标
+                root.iconbitmap(default=ico_path)
+                logger.info(f"🎨 ICO图标加载成功: {ico_path}")
+            elif os.path.exists(png_path):
+                # 使用PNG图标作为备选
+                try:
+                    root.iconbitmap(default=png_path)
+                    logger.info(f"🎨 PNG图标加载成功: {png_path}")
+                except Exception:
+                    # PNG格式在某些Windows版本上不兼容，使用PIL方法
+                    try:
+                        from PIL import Image, ImageTk
+                        icon_image = ImageTk.PhotoImage(file=png_path)
+                        root.iconphoto(True, icon_image)
+                        logger.info("🎨 使用PIL PhotoImage加载PNG图标成功")
+                    except ImportError:
+                        logger.warning("⚠️ PIL库未安装，无法使用PhotoImage加载图标")
+            else:
+                logger.warning("⚠️ 图标文件不存在")
+                
         except Exception as e:
             logger.warning(f"⚠️ 窗口图标加载失败: {e}")
         

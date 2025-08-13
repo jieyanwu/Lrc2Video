@@ -370,7 +370,7 @@ class VideoGenerator:
         
         # 添加输出路径
         cmd.append(str(output_path))
-        
+        print(cmd)
         return cmd
     
     def parse_ffmpeg_progress(self, output_line, total_duration):
