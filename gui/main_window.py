@@ -62,11 +62,7 @@ class LyricsVideoGenerator:
         self.concurrency_var = IntVar(value=2)
         self.resolution = StringVar(value="1920x1080")
         
-        # AI标题生成相关变量
-        self.ai_title_enabled = BooleanVar(value=False)
-        
-        # AI标题生成相关变量
-        self.ai_title_enabled = BooleanVar(value=False)
+        # AI配置变量
         self.openai_api_key = StringVar(value="")
         
         # 视频生成器
@@ -434,7 +430,6 @@ class LyricsVideoGenerator:
                     "audio_folder": "",
                     "output_folder": "output",
 
-                    "ai_title_enabled": False,
                     "openai_api_key": "",
                     "remember_folders": True
                 }
@@ -460,7 +455,6 @@ class LyricsVideoGenerator:
                 "thread_count": 0
             },
             "ai": {
-                "ai_title_enabled": False,
                 "ai_title_prompt": "请为这首歌曲生成一个15-25字的视频标题",
                 "auto_cleanup": True,
                 "fallback_to_default": True
@@ -513,10 +507,6 @@ class LyricsVideoGenerator:
         if 'resolution' in style_config:
             self.resolution.set(style_config['resolution'])
         
-        # 应用AI配置
-        if 'ai_title_enabled' in ai_config:
-            self.ai_title_enabled.set(ai_config['ai_title_enabled'])
-        
         # 应用API配置 (从会话设置中获取)
         api_key = last_session.get('openai_api_key', '')
         if api_key:
@@ -541,8 +531,7 @@ class LyricsVideoGenerator:
             self.output_var.set(last_session['output_folder'])
             self.output_dir = Path(last_session['output_folder'])
 
-        if last_session.get('ai_title_enabled'):
-            self.ai_title_enabled.set(True)
+        # 应用API密钥配置
         if last_session.get('openai_api_key'):
             self.openai_api_key.set(last_session['openai_api_key'])
 
@@ -554,13 +543,11 @@ class LyricsVideoGenerator:
             
             # 更新用户偏好
             self.user_preferences['video'] = current_config
-            self.user_preferences['ai']['ai_title_enabled'] = self.ai_title_enabled.get()
             
             # 更新会话设置
             self.user_preferences['app']['last_session'] = {
                 "audio_folder": self.folder_var.get(),
                 "output_folder": str(self.output_dir),
-                "ai_title_enabled": self.ai_title_enabled.get(),
                 "openai_api_key": self.openai_api_key.get(),
                 "remember_folders": True
             }
@@ -582,6 +569,12 @@ class LyricsVideoGenerator:
             self.root.after_cancel(self._save_timer)
         self._save_timer = self.root.after(1000, self.save_user_preferences)  # 1秒后保存
 
+    def is_ai_enabled(self):
+        """检查AI功能是否启用"""
+        from utils.config_manager import get_config
+        config = get_config()
+        return config.get('ai.enabled', False)
+    
     def get_config(self):
         """获取当前配置"""
         config = {
@@ -758,6 +751,7 @@ class LyricsVideoGenerator:
         concurrency_row = Frame(import_frame, bg=COLORS['surface'])
         concurrency_row.pack(fill=X, pady=(10, 0))
         
+        # 并发线程数
         create_modern_label(concurrency_row, "⚡ 并发线程数:").pack(side=LEFT)
         concurrency_scale = Scale(concurrency_row, from_=1, to=8, orient=HORIZONTAL, 
                                   variable=self.concurrency_var, length=150,
@@ -1285,13 +1279,16 @@ class LyricsVideoGenerator:
         bg_image_path = self.bg_var.get() if self.bg_var.get() else None
         config = self.get_config()
         
+        # 检查AI功能是否启用
+        ai_enabled = self.is_ai_enabled()
+        
         # 设置环境变量用于AI标题生成
-        if self.ai_title_enabled.get() and self.openai_api_key.get():
+        if ai_enabled and self.openai_api_key.get():
             import os
             os.environ['OPENAI_API_KEY'] = self.openai_api_key.get()
         
         # 使用AI标题时，先生成标题再构造输出路径
-        if self.ai_title_enabled.get():
+        if ai_enabled:
             from utils.ai_title_generator import generate_video_title
             song_name = Path(audio_path).stem
             artist = config.get('artist', None)
@@ -1326,7 +1323,7 @@ class LyricsVideoGenerator:
                 generator = VideoGenerator(progress_callback)
                 success, result = generator.generate_video(
                     audio_path, lrc_path, config, bg_image_path, output_path, 
-                    use_ai_title=self.ai_title_enabled.get()
+                    use_ai_title=ai_enabled
                 )
                 if success:
                     self.log(f"✅ 视频生成成功：{result}")
@@ -1372,8 +1369,11 @@ class LyricsVideoGenerator:
             success_count = 0
             total_files = len(self.file_pairs)
             
+            # 检查AI功能是否启用
+            ai_enabled = self.is_ai_enabled()
+            
             # 设置环境变量用于AI标题生成
-            if self.ai_title_enabled.get() and self.openai_api_key.get():
+            if ai_enabled and self.openai_api_key.get():
                 os.environ['OPENAI_API_KEY'] = self.openai_api_key.get()
             
             # 使用用户配置的并发度
@@ -1464,9 +1464,12 @@ class LyricsVideoGenerator:
             print(f"   歌词: {lrc_path}")
             print(f"   背景: {bg_image_path}")
             
+            # 检查AI功能是否启用
+            ai_enabled = self.is_ai_enabled()
+            
             # 处理AI标题
             final_output_path = output_path
-            if self.ai_title_enabled.get():
+            if ai_enabled:
                 try:
                     song_name = audio_path.stem
                     artist = config.get('artist', None)
@@ -1505,7 +1508,7 @@ class LyricsVideoGenerator:
             generator = VideoGenerator(progress_callback)
             return generator.generate_video(
                 audio_path, lrc_path, config, bg_image_path, final_output_path,
-                use_ai_title=self.ai_title_enabled.get()
+                use_ai_title=ai_enabled
             )
             
         except Exception as e:
@@ -1535,11 +1538,7 @@ class LyricsVideoGenerator:
             # 无论如何都要关闭窗口
             self.root.destroy()
     
-    def toggle_ai_title(self):
-        """切换AI标题生成功能"""
-        if self.ai_title_enabled.get():
-            self.show_api_key_dialog()
-        self.auto_save_preferences()
+
     
     def show_api_key_dialog(self):
         """显示OpenAI API密钥输入对话框"""
@@ -1608,7 +1607,7 @@ class LyricsVideoGenerator:
             dialog.destroy()
         
         def cancel():
-            self.ai_title_enabled.set(False)
+
             dialog.destroy()
         
         create_modern_button(btn_frame, "保存", save_and_close, 'primary').pack(side=LEFT, padx=5)

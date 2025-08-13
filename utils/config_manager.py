@@ -44,8 +44,16 @@ class ConfigManager:
             },
             "ai": {
                 "enabled": False,
-                "provider": "openai",
-                "providers": {}
+                "provider": "moonshot",
+                "providers": {
+                    "moonshot": {
+                        "api_key": "",
+                        "base_url": "https://api.moonshot.cn/v1",
+                        "model": "kimi-k1-8k",
+                        "timeout": 30,
+                        "max_retries": 3
+                    }
+                }
             },
             "video": {
                 "resolution": "1920x1080",
@@ -172,12 +180,12 @@ class ConfigManager:
             print(f"导入配置失败: {e}")
     
     def get_available_providers(self) -> Dict[str, Dict[str, str]]:
-        """获取可用的AI提供商配置信息"""
+        """获取可用的AI提供商 - 仅保留Moonshot"""
         return {
-            "openai": {
-                "name": "OpenAI",
-                "description": "OpenAI GPT系列模型 (需要OpenAI API密钥)",
-                "models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo-preview"]
+            "moonshot": {
+                "name": "Moonshot",
+                "description": "月之暗面 Kimi",
+                "models": ["kimi-k2-0711-preview", "kimi-k1-8k", "kimi-k1-32k"]
             }
         }
 

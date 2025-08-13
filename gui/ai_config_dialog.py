@@ -73,23 +73,21 @@ class AIConfigDialog(tk.Toplevel):
         self.enabled_var = tk.BooleanVar()
         enabled_frame = ttk.Frame(main_frame)
         enabled_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
-        
+
         enabled_check = ttk.Checkbutton(
             enabled_frame, 
-            text="启用AI标题生成功能",
+            text="启用AI功能",
             variable=self.enabled_var
         )
         enabled_check.pack(side=tk.LEFT)
         
-        # 提供商选择
+        # 提供商选择 - 仅保留 Moonshot
         provider_frame = ttk.LabelFrame(main_frame, text="AI提供商", padding="15")
         provider_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 15))
-        
+
         self.provider_var = tk.StringVar()
-        from utils.config_manager import ConfigManager
-        config = get_config()
-        providers = ConfigManager().get_available_providers()
-        
+        providers = {"moonshot": {"name": "Moonshot", "description": "月之暗面 Kimi"}}
+
         for i, (key, info) in enumerate(providers.items()):
             radio = ttk.Radiobutton(
                 provider_frame,
@@ -99,7 +97,7 @@ class AIConfigDialog(tk.Toplevel):
                 command=self.on_provider_change
             )
             radio.grid(row=i, column=0, sticky=tk.W, pady=2)
-            
+
             info_label = ttk.Label(
                 provider_frame,
                 text=info["description"],
@@ -210,6 +208,8 @@ class AIConfigDialog(tk.Toplevel):
         # 启用状态
         self.enabled_var.set(ai_config.get("enabled", True))
         
+
+        
         # 提供商
         current_provider = ai_config.get("provider", "openrouter")
         self.provider_var.set(current_provider)
@@ -226,30 +226,13 @@ class AIConfigDialog(tk.Toplevel):
         self.retries_var.set(ai_config.get("max_retries", 2))
     
     def on_provider_change(self):
-        """提供商变更时的处理"""
+        """提供商变更时的处理 - 仅保留Moonshot"""
         provider = self.provider_var.get()
         
-        # 获取提供商的默认配置
-        from utils.config_manager import ConfigManager
-        providers = ConfigManager().get_available_providers()
-        default_configs = {
-            "openai": {
-                "base_url": "https://api.openai.com/v1",
-                "model": "gpt-3.5-turbo"
-            },
-            "openrouter": {
-                "base_url": "https://openrouter.ai/api/v1",
-                "model": "moonshotai/kimi-k2:free"
-            },
-            "moonshot": {
-                "base_url": "https://api.moonshot.cn/v1",
-                "model": "kimi-k2-0711-preview"
-            }
-        }
-        
-        config = default_configs.get(provider, {})
-        self.base_url_var.set(config.get("base_url", ""))
-        self.model_var.set(config.get("model", ""))
+        # Moonshot默认配置
+        if provider == "moonshot":
+            self.base_url_var.set("https://api.moonshot.cn/v1")
+            self.model_var.set("kimi-k2-0711-preview")
         
         # 清空API密钥
         self.api_key_var.set("")
