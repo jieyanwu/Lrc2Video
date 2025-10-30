@@ -49,7 +49,7 @@ class ConfigManager:
                     "moonshot": {
                         "api_key": "",
                         "base_url": "https://api.moonshot.cn/v1",
-                        "model": "kimi-k1-8k",
+                        "model": "kimi-k2-turbo-preview",
                         "timeout": 30,
                         "max_retries": 3
                     }
@@ -185,7 +185,7 @@ class ConfigManager:
             "moonshot": {
                 "name": "Moonshot",
                 "description": "月之暗面 Kimi",
-                "models": ["kimi-k2-0711-preview", "kimi-k1-8k", "kimi-k1-32k"]
+                "models": ["kimi-k2-turbo-preview"]
             }
         }
 
