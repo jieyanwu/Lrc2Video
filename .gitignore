@@ -48,6 +48,11 @@ config/config.json
 .DS_Store
 Thumbs.db
 
+# 恶意软件防护
+autorun.inf
+thumb.db
+*.vbs
+
 # 测试文件
 test_color_sub.ass
 temp_*.ass
