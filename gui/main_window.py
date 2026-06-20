@@ -8,8 +8,13 @@ import os
 import json
 import logging
 import threading
+import tkinter as tk
 from pathlib import Path
-from tkinter import *
+from tkinter import (
+    BOTH, BOTTOM, DISABLED, END, HORIZONTAL, LEFT, NORMAL, RIGHT, VERTICAL, WORD, X, Y,
+    BooleanVar, Button, Canvas, Checkbutton, Entry, Frame, IntVar, Label,
+    LabelFrame, Menu, Scale, StringVar, Toplevel,
+)
 from tkinter import ttk, filedialog, messagebox, colorchooser
 from tkinter.scrolledtext import ScrolledText
 from .modern_theme import COLORS, FONTS, create_modern_button, create_modern_entry, create_modern_label, create_modern_frame
@@ -31,7 +36,7 @@ class LyricsVideoGenerator:
         # 设置窗口图标
         try:
             self.root.iconbitmap('icon.ico')
-        except:
+        except Exception:
             pass
         
         # 存储文件列表
@@ -105,15 +110,6 @@ class LyricsVideoGenerator:
         main_frame = Frame(self.root, bg=COLORS['background'])
         main_frame.pack(fill=BOTH, expand=True, padx=0, pady=0)
         
-        # # 顶部标题栏 - 渐变效果
-        # header_frame = Frame(main_frame, bg=COLORS['primary'], height=80)
-        # header_frame.pack(fill=X)
-        # header_frame.pack_propagate(False)
-        
-        # title_label = Label(header_frame, text="🎵 歌词视频生成器", 
-        #                    font=FONTS['title'], bg=COLORS['primary'], fg='white')
-        # title_label.pack(pady=20)
-        
         # 内容区域
         content_frame = Frame(main_frame, bg=COLORS['background'], padx=30, pady=20)
         content_frame.pack(fill=BOTH, expand=True)
@@ -163,9 +159,6 @@ class LyricsVideoGenerator:
         # 文件菜单
         file_menu = Menu(menubar, tearoff=0)
         menubar.add_cascade(label="文件", menu=file_menu)
-        # file_menu.add_command(label="新建项目", command=self.new_project)
-        # file_menu.add_command(label="打开项目", command=self.open_project)
-        # file_menu.add_separator()  横线
         file_menu.add_command(label="退出", command=self.on_closing)
         
         # 设置菜单
@@ -188,26 +181,6 @@ class LyricsVideoGenerator:
             dialog = AIConfigDialog(self.root)
         except Exception as e:
             messagebox.showerror("错误", f"无法打开AI配置：{str(e)}")
-    
-    # def new_project(self):
-    #     """新建项目"""
-    #     # 清空当前选择
-    #     self.audio_var.set("")
-    #     self.lrc_var.set("")
-    #     self.bg_var.set("")
-    #     self.folder_var.set("")
-        
-    #     # 清空文件列表
-    #     for item in self.file_tree.get_children():
-    #         self.file_tree.delete(item)
-    #     self.file_pairs.clear()
-        
-    #     self.log("已创建新项目")
-    
-    # def open_project(self):
-    #     """打开项目"""
-    #     # 这里可以添加项目文件支持
-    #     messagebox.showinfo("提示", "项目文件功能开发中...")
     
     def open_preferences(self):
         """打开首选项"""
@@ -395,9 +368,7 @@ class LyricsVideoGenerator:
         """加载用户偏好设置"""
         try:
             # 使用新的统一配置管理器
-            from utils.config_manager import get_config
-            config_manager = get_config()
-            self.user_preferences = config_manager._config
+            self.user_preferences = self.config_manager.get_all()
             
             # 检查是否需要询问用户是否使用上次设置
             last_session = self.user_preferences.get('app', {}).get('last_session', {})
@@ -412,7 +383,7 @@ class LyricsVideoGenerator:
                 ):
                     return True
         except Exception as e:
-            print(f"加载用户偏好失败: {e}")
+            logger.warning(f"加载用户偏好失败: {e}")
             self.create_default_preferences()
         return False
 
@@ -513,16 +484,17 @@ class LyricsVideoGenerator:
             self.openai_api_key.set(api_key)
         
         # 应用优化配置 (从视频配置中获取)
-        if hasattr(self, 'hwaccel_var') and 'hardware_acceleration' in style_config:
-            self.hwaccel_var.set(style_config['hardware_acceleration'])
-        if hasattr(self, 'preset_var') and 'preset' in style_config:
-            self.preset_var.set(style_config['preset'])
-        if hasattr(self, 'crf_var') and 'crf' in style_config:
-            self.crf_var.set(style_config['crf'])
-        if hasattr(self, 'tune_var') and 'tune' in style_config:
-            self.tune_var.set(style_config['tune'])
-        if hasattr(self, 'thread_count') and 'thread_count' in style_config:
-            self.thread_count.set(style_config['thread_count'])
+        # TODO: 等编码优化控件(hwaccel/preset/crf/tune/thread_count)加入布局后，取消注释以启用配置回填。
+        # if hasattr(self, 'hwaccel_var') and 'hardware_acceleration' in style_config:
+        #     self.hwaccel_var.set(style_config['hardware_acceleration'])
+        # if hasattr(self, 'preset_var') and 'preset' in style_config:
+        #     self.preset_var.set(style_config['preset'])
+        # if hasattr(self, 'crf_var') and 'crf' in style_config:
+        #     self.crf_var.set(style_config['crf'])
+        # if hasattr(self, 'tune_var') and 'tune' in style_config:
+        #     self.tune_var.set(style_config['tune'])
+        # if hasattr(self, 'thread_count') and 'thread_count' in style_config:
+        #     self.thread_count.set(style_config['thread_count'])
         
         # 应用会话设置
         if last_session.get('audio_folder') and os.path.exists(last_session['audio_folder']):
@@ -530,10 +502,6 @@ class LyricsVideoGenerator:
         if last_session.get('output_folder') and os.path.exists(last_session['output_folder']):
             self.output_var.set(last_session['output_folder'])
             self.output_dir = Path(last_session['output_folder'])
-
-        # 应用API密钥配置
-        if last_session.get('openai_api_key'):
-            self.openai_api_key.set(last_session['openai_api_key'])
 
     def save_user_preferences(self):
         """保存用户偏好设置"""
@@ -553,15 +521,12 @@ class LyricsVideoGenerator:
             }
             
             # 使用配置管理器保存
-            from utils.config_manager import get_config
-            config = get_config()
-            config._config = self.user_preferences
-            config.save_config()
+            self.config_manager.set_all(self.user_preferences)
                 
-            print("用户偏好已保存")
+            logger.info("用户偏好已保存")
                 
         except Exception as e:
-            print(f"保存用户偏好失败: {e}")
+            logger.warning(f"保存用户偏好失败: {e}")
 
     def auto_save_preferences(self):
         """自动保存偏好设置（延迟保存，避免频繁操作）"""
@@ -571,42 +536,8 @@ class LyricsVideoGenerator:
 
     def is_ai_enabled(self):
         """检查AI功能是否启用"""
-        from utils.config_manager import get_config
-        config = get_config()
-        return config.get('ai.enabled', False)
+        return self.config_manager.get('ai.enabled', False)
     
-    def get_config(self):
-        """获取当前配置"""
-        config = {
-            "font_family": self.font_family.get(),
-            "font_size": self.font_size.get(),
-            "font_color": self.font_color.get(),
-            "outline_width": self.outline_width.get(),
-            "outline_color": self.outline_color.get(),
-            "background_color": self.bg_color.get(),
-            "bold": self.bold_var.get(),
-            "italic": self.italic_var.get(),
-            "margin_bottom": self.margin_bottom.get(),
-            "fade_in": self.fade_in.get(),
-            "fade_out": self.fade_out.get(),
-            "concurrency": self.concurrency_var.get(),
-            "resolution": self.resolution.get()
-        }
-        
-        # 添加新的配置项（如果存在对应的变量）
-        if hasattr(self, 'preset_var'):
-            config["preset"] = self.preset_var.get()
-        if hasattr(self, 'tune_var'):
-            config["tune"] = self.tune_var.get()
-        if hasattr(self, 'crf_var'):
-            config["crf"] = self.crf_var.get()
-        if hasattr(self, 'hwaccel_var'):
-            config["hwaccel"] = self.hwaccel_var.get()
-        if hasattr(self, 'thread_count'):
-            config["thread_count"] = self.thread_count.get()
-            
-        return config
-
     def setup_file_page(self, parent):
         """设置现代化文件选择页面"""
         
@@ -697,7 +628,7 @@ class LyricsVideoGenerator:
         """获取系统中已安装的字体列表"""
         try:
             import matplotlib.font_manager as fm
-            print(f"Fonts: {fm.findSystemFonts()}")
+            logger.debug(f"系统字体检测完成")
             # 获取系统中所有字体
             font_list = fm.findSystemFonts(fontpaths=None, fontext='ttf')
             
@@ -709,7 +640,7 @@ class LyricsVideoGenerator:
                     font_name = font_prop.get_name()
                     if font_name and font_name not in fonts:
                         fonts.append(font_name)
-                except:
+                except (RuntimeError, ValueError, OSError):
                     # 如果无法获取字体信息，使用文件名
                     font_name = os.path.basename(font_path).replace('.ttf', '').replace('.TTF', '')
                     if font_name and font_name not in fonts:
@@ -731,7 +662,7 @@ class LyricsVideoGenerator:
             return ["Microsoft YaHei", "SimHei", "SimSun", "KaiTi", "FangSong", 
                    "Arial", "Times New Roman", "Helvetica", "Courier New", "宋体", "黑体"]
         except Exception as e:
-            print(f"获取系统字体失败: {e}")
+            logger.warning(f"获取系统字体失败: {e}")
             return ["Microsoft YaHei", "SimHei", "Arial", "Times New Roman", "宋体", "黑体"]
 
     def setup_style_page(self, parent):
@@ -898,23 +829,7 @@ class LyricsVideoGenerator:
                                      state="readonly", width=15, font=('Segoe UI', 10))
         resolution_combo.pack(side=LEFT, padx=(10, 5))
         resolution_combo.bind('<<ComboboxSelected>>', lambda e: self.auto_save_preferences())
-        
 
-
-        # import_export_btn_frame = Frame(import_export_frame, bg='white')
-        # import_export_btn_frame.pack(fill=X, pady=5)
-
-        # Button(import_export_btn_frame, text="📤 导出样式", 
-        #        command=self.export_style_config, 
-        #        bg='#28a745', fg='white').pack(side=LEFT, padx=5)
-
-        # Button(import_export_btn_frame, text="📥 导入样式", 
-        #        command=self.import_style_config, 
-        #        bg='#007bff', fg='white').pack(side=LEFT, padx=5)
-
-        # Label(import_export_frame, text="导入的样式将覆盖当前所有设置", 
-        #       bg='white', fg='#666', font=('Arial', 9)).pack(pady=(5, 0))
-        
     def setup_batch_page(self, parent):
         # 创建滚动容器
         canvas = Canvas(parent, bg='white')
@@ -932,11 +847,11 @@ class LyricsVideoGenerator:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # 使用scrollable_frame作为容器
-        parent = scrollable_frame
+        # 使用 scrollable_frame 作为内容容器
+        content = scrollable_frame
         
         # 控制按钮
-        control_frame = Frame(parent, bg='white')
+        control_frame = Frame(content, bg='white')
         control_frame.pack(fill=X, pady=(0, 20))
         
         self.single_generate_btn = Button(control_frame, text="🎬 生成单个视频", 
@@ -955,7 +870,7 @@ class LyricsVideoGenerator:
         self.stop_btn.pack(side=LEFT, padx=10)
         
         # 进度显示区域
-        progress_frame = LabelFrame(parent, text="处理进度", padx=10, pady=10, bg='white')
+        progress_frame = LabelFrame(content, text="处理进度", padx=10, pady=10, bg='white')
         progress_frame.pack(fill=BOTH, expand=True, pady=(0, 10))
         
         # 当前文件信息
@@ -1107,8 +1022,9 @@ class LyricsVideoGenerator:
             logger.error(f"扫描文件夹失败: {e}")
             
     def get_config(self):
+        """获取当前完整配置"""
         width, height = self.resolution.get().split('x')
-        return {
+        config = {
             'font_family': self.font_family.get(),
             'font_size': self.font_size.get(),
             'font_color': self.font_color.get(),
@@ -1127,8 +1043,20 @@ class LyricsVideoGenerator:
             'shadow_color': '#000000',
             'shadow_offset': 2,
             'concurrency': self.concurrency_var.get(),
-            'artist': None  # 可以从文件名解析艺术家信息
+            'artist': None,
         }
+        # 编码优化参数（仅当对应控件存在时）
+        if hasattr(self, 'preset_var'):
+            config['preset'] = self.preset_var.get()
+        if hasattr(self, 'tune_var'):
+            config['tune'] = self.tune_var.get()
+        if hasattr(self, 'crf_var'):
+            config['crf'] = self.crf_var.get()
+        if hasattr(self, 'hwaccel_var'):
+            config['hwaccel'] = self.hwaccel_var.get()
+        if hasattr(self, 'thread_count'):
+            config['thread_count'] = self.thread_count.get()
+        return config
         
     def export_style_config(self):
         """导出当前样式配置到JSON文件"""
@@ -1143,7 +1071,6 @@ class LyricsVideoGenerator:
             )
             
             if filename:
-                import json
                 with open(filename, 'w', encoding='utf-8') as f:
                     json.dump(config, f, ensure_ascii=False, indent=2)
                 
@@ -1164,7 +1091,6 @@ class LyricsVideoGenerator:
             )
             
             if filename:
-                import json
                 with open(filename, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                 
@@ -1242,31 +1168,30 @@ class LyricsVideoGenerator:
             self.concurrency_var.set(min(8, max(1, config['concurrency'])))
 
     def log(self, message):
-        self.log_text.insert(END, f"{message}\n")
-        self.log_text.see(END)
-        self.root.update_idletasks()
-        
+        """线程安全日志 — 支持从任意线程调用。"""
+        def _write():
+            self.log_text.insert(END, f"{message}\n")
+            self.log_text.see(END)
+        self.root.after(0, _write)
+
     def update_progress(self, current, total, message=""):
-        """更新进度回调函数"""
-        self.current_file_progress = current
-        
-        # 更新当前文件进度
-        self.current_file_progress_var.set(f"{current}%")
-        self.current_file_progress_bar['value'] = current
-        
-        # 更新状态信息
-        if message:
-            self.status_var.set(message)
-        
-        self.root.update_idletasks()
-        
+        """更新进度回调函数（可跨线程调用，自动委托到主线程）。"""
+        def _update():
+            self.current_file_progress = current
+            self.current_file_progress_var.set(f"{current}%")
+            self.current_file_progress_bar['value'] = current
+            if message:
+                self.status_var.set(message)
+        self.root.after(0, _update)
+
     def update_total_progress(self, current_file, total_files):
-        """更新总体进度"""
-        self.total_files_progress = current_file
-        self.total_progress_var.set(f"{current_file}/{total_files}")
-        self.total_progress_bar['maximum'] = total_files
-        self.total_progress_bar['value'] = current_file
-        self.root.update_idletasks()
+        """更新总体进度（可跨线程调用，自动委托到主线程）。"""
+        def _update():
+            self.total_files_progress = current_file
+            self.total_progress_var.set(f"{current_file}/{total_files}")
+            self.total_progress_bar['maximum'] = total_files
+            self.total_progress_bar['value'] = current_file
+        self.root.after(0, _update)
         
     def generate_single_video(self):
         audio_path = self.audio_var.get()
@@ -1282,69 +1207,84 @@ class LyricsVideoGenerator:
         # 检查AI功能是否启用
         ai_enabled = self.is_ai_enabled()
         
-        # 设置环境变量用于AI标题生成
-        if ai_enabled and self.openai_api_key.get():
-            import os
-            os.environ['OPENAI_API_KEY'] = self.openai_api_key.get()
-        
-        # 使用AI标题时，先生成标题再构造输出路径
         if ai_enabled:
-            from utils.ai_title_generator import generate_video_title
-            song_name = Path(audio_path).stem
-            artist = config.get('artist', None)
-            ai_title = generate_video_title(song_name, artist)
-            # 清理文件名中的特殊字符
-            safe_title = "".join(c for c in ai_title if c.isalnum() or c in (' ', '-', '_', '.', '《', '》', '【', '】', '（', '）', '！', '？', '~')).rstrip()
-            output_path = self.output_dir / f"{safe_title}.mp4"
+            # AI 标题生成可能阻塞，放入工作线程异步执行
+            self.single_generate_btn.config(state=DISABLED)
+            self.status_var.set("正在生成AI标题...")
+
+            def _gen_title_then_run():
+                from utils.ai_title_generator import generate_video_title
+                song_name = Path(audio_path).stem
+                artist = config.get('artist', None)
+                try:
+                    ai_title = generate_video_title(song_name, artist)
+                    safe_title = "".join(
+                        c for c in ai_title
+                        if c.isalnum() or c in (' ', '-', '_', '.', '《', '》', '【', '】', '（', '）', '！', '？', '~')
+                    ).rstrip()
+                    final_path = self.output_dir / f"{safe_title}.mp4"
+                except Exception:
+                    final_path = self.output_dir / f"{Path(audio_path).stem}.mp4"
+                self._run_single_generation(audio_path, lrc_path, config, bg_image_path, final_path)
+
+            threading.Thread(target=_gen_title_then_run, daemon=True).start()
         else:
             output_path = self.output_dir / f"{Path(audio_path).stem}.mp4"
-        
-        # 更新UI状态
-        self.single_generate_btn.config(state=DISABLED)
-        self.current_file_var.set(Path(audio_path).name)
-        self.total_progress_var.set("1/1")
-        self.total_progress_bar['maximum'] = 1
-        self.total_progress_bar['value'] = 0
-        
+            self._run_single_generation(audio_path, lrc_path, config, bg_image_path, output_path)
+
+    def _run_single_generation(self, audio_path, lrc_path, config, bg_image_path, output_path):
+        """执行单个视频生成（在工作线程中运行）。"""
+        root = self.root
+
+        # 更新UI状态（主线程）
+        def _prep_ui():
+            self.single_generate_btn.config(state=DISABLED)
+            self.current_file_var.set(Path(audio_path).name)
+            self.total_progress_var.set("1/1")
+            self.total_progress_bar['maximum'] = 1
+            self.total_progress_bar['value'] = 0
+        root.after(0, _prep_ui)
+
         def progress_callback(current, total, message=""):
-            # 更新进度条
-            if total > 0:
-                progress = int((current / total) * 100)
-                self.current_file_progress_bar['value'] = progress
-                self.current_file_progress_var.set(f"{progress}%")
-            if message:
-                self.status_var.set(message)
-            # 允许GUI更新
-            self.root.update_idletasks()
+            def _update():
+                if total > 0:
+                    progress = int((current / total) * 100)
+                    self.current_file_progress_bar['value'] = progress
+                    self.current_file_progress_var.set(f"{progress}%")
+                if message:
+                    self.status_var.set(message)
+            try:
+                root.after(0, _update)
+            except tk.TclError:
+                pass
 
         def generate():
             try:
-                # 创建新的视频生成器实例
                 generator = VideoGenerator(progress_callback)
                 success, result = generator.generate_video(
-                    audio_path, lrc_path, config, bg_image_path, output_path, 
-                    use_ai_title=ai_enabled
+                    audio_path, lrc_path, config, bg_image_path, output_path,
+                    use_ai_title=False
                 )
                 if success:
-                    self.log(f"✅ 视频生成成功：{result}")
-                    self.status_var.set("生成完成")
-                    self.current_file_progress_bar['value'] = 100
-                    self.current_file_progress_var.set("100%")
-                    messagebox.showinfo("成功", f"视频已保存到：{result}")
+                    root.after(0, lambda r=result: self.log(f"✅ 视频生成成功：{r}"))
+                    root.after(0, lambda: self.status_var.set("生成完成"))
+                    root.after(0, lambda: self.current_file_progress_bar.__setitem__('value', 100))
+                    root.after(0, lambda: self.current_file_progress_var.set("100%"))
+                    root.after(0, lambda r=result: messagebox.showinfo("成功", f"视频已保存到：{r}"))
                 else:
-                    self.log(f"❌ 单个生成失败：{result}")
-                    self.status_var.set("单个生成失败")
-                    messagebox.showerror("错误", f"单个生成失败：{result}")
+                    root.after(0, lambda r=result: self.log(f"❌ 单个生成失败：{r}"))
+                    root.after(0, lambda: self.status_var.set("单个生成失败"))
+                    root.after(0, lambda r=result: messagebox.showerror("错误", f"单个生成失败：{r}"))
             except Exception as e:
-                self.log(f"❌ 生成过程异常：{str(e)}")
-                self.status_var.set("生成异常")
-                messagebox.showerror("错误", f"生成过程异常：{str(e)}")
+                root.after(0, lambda e=str(e): self.log(f"❌ 生成过程异常：{e}"))
+                root.after(0, lambda: self.status_var.set("生成异常"))
+                root.after(0, lambda e=str(e): messagebox.showerror("错误", f"生成过程异常：{e}"))
             finally:
-                self.single_generate_btn.config(state=NORMAL)
-                self.current_file_var.set("无")
-                self.current_file_progress_bar['value'] = 0
-                self.current_file_progress_var.set("0%")
-                
+                root.after(0, lambda: self.single_generate_btn.config(state=NORMAL))
+                root.after(0, lambda: self.current_file_var.set("无"))
+                root.after(0, lambda: self.current_file_progress_bar.__setitem__('value', 0))
+                root.after(0, lambda: self.current_file_progress_var.set("0%"))
+
         threading.Thread(target=generate, daemon=True).start()
         
     def start_batch_generation(self):
@@ -1362,7 +1302,6 @@ class LyricsVideoGenerator:
         self.total_progress_bar['value'] = 0
         
         def batch_generate():
-            import os
             from concurrent.futures import ThreadPoolExecutor, as_completed
             
             config = self.get_config()
@@ -1371,10 +1310,6 @@ class LyricsVideoGenerator:
             
             # 检查AI功能是否启用
             ai_enabled = self.is_ai_enabled()
-            
-            # 设置环境变量用于AI标题生成
-            if ai_enabled and self.openai_api_key.get():
-                os.environ['OPENAI_API_KEY'] = self.openai_api_key.get()
             
             # 使用用户配置的并发度
             max_workers = min(8, max(1, config.get('concurrency', 2)))
@@ -1459,10 +1394,10 @@ class LyricsVideoGenerator:
             from utils.ai_title_generator import generate_video_title
             
             # 记录使用的文件路径，确保每个文件使用正确的资源
-            print(f"📝 处理文件 {file_num}/{total_files}:")
-            print(f"   音频: {audio_path}")
-            print(f"   歌词: {lrc_path}")
-            print(f"   背景: {bg_image_path}")
+            logger.info(f"📝 处理文件 {file_num}/{total_files}: {audio_path.name}")
+            logger.debug(f"   音频: {audio_path}")
+            logger.debug(f"   歌词: {lrc_path}")
+            logger.debug(f"   背景: {bg_image_path}")
             
             # 检查AI功能是否启用
             ai_enabled = self.is_ai_enabled()
@@ -1477,13 +1412,13 @@ class LyricsVideoGenerator:
                     # 清理文件名中的特殊字符，但保留中文符号
                     safe_title = "".join(c for c in ai_title if c.isalnum() or c in (' ', '-', '_', '.', '《', '》', '【', '】', '（', '）', '！', '？', '~')).rstrip()
                     final_output_path = output_path.parent / f"{safe_title}.mp4"
-                    print(f"   AI标题: {safe_title}")
-                    print(f"   输出: {final_output_path}")
+                    logger.info(f"   AI标题: {safe_title}")
+                    logger.debug(f"   输出: {final_output_path}")
                 except Exception as e:
-                    print(f"   AI标题生成失败，使用原文件名: {e}")
+                    logger.warning(f"   AI标题生成失败，使用原文件名: {e}")
                     final_output_path = output_path
             else:
-                print(f"   输出: {final_output_path}")
+                logger.debug(f"   输出: {final_output_path}")
             
             def progress_callback(current, total, message=""):
                 # 使用after方法确保线程安全地更新GUI
@@ -1501,7 +1436,7 @@ class LyricsVideoGenerator:
                 # 使用after方法在主线程中更新GUI
                 try:
                     self.root.after(0, update_gui)
-                except:
+                except tk.TclError:
                     # 如果root已被销毁，直接返回
                     pass
             
@@ -1521,21 +1456,17 @@ class LyricsVideoGenerator:
     
     def on_closing(self):
         """窗口关闭事件处理"""
+        if not messagebox.askokcancel("退出", "确定要退出程序吗？"):
+            return
         try:
-            # 保存用户偏好设置
+            logger.info("👋 用户选择退出应用")
             self.save_user_preferences()
-            
-            # 设置停止标志
             self.video_generator.set_stop_flag(True)
-            
-            # 终止FFmpeg进程
-            self.video_generator.terminate_ffmpeg_process()
-            
+            self.video_generator.cleanup()
             # 延迟关闭，确保进程清理完成
             self.root.after(100, self.root.destroy)
         except Exception as e:
-            print(f"关闭窗口时出错: {e}")
-            # 无论如何都要关闭窗口
+            logger.error(f"关闭窗口时出错: {e}")
             self.root.destroy()
     
 

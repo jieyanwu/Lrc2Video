@@ -1,7 +1,11 @@
+import copy
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigManager:
@@ -20,6 +24,10 @@ class ConfigManager:
             if self.config_file.exists():
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     self._config = json.load(f)
+                # 反混淆所有 provider 的 api_key
+                for provider_cfg in self._config.get('ai', {}).get('providers', {}).values():
+                    if 'api_key' in provider_cfg and provider_cfg['api_key']:
+                        provider_cfg['api_key'] = self._deobfuscate(provider_cfg['api_key'])
             else:
                 # 如果配置文件不存在，从示例文件创建
                 if self.example_file.exists():
@@ -29,7 +37,7 @@ class ConfigManager:
                 else:
                     self._config = self._get_default_config()
         except Exception as e:
-            print(f"加载配置文件失败: {e}")
+            logger.warning(f"加载配置文件失败: {e}")
             self._config = self._get_default_config()
     
     def _get_default_config(self) -> Dict[str, Any]:
@@ -86,6 +94,15 @@ class ConfigManager:
             }
         }
     
+    def get_all(self) -> Dict[str, Any]:
+        """获取全部配置的副本（避免外部修改内部状态）"""
+        return copy.deepcopy(self._config)
+    
+    def set_all(self, config: Dict[str, Any]):
+        """批量设置配置并保存"""
+        self._config = config
+        self.save_config()
+    
     def get(self, key_path: str, default: Any = None) -> Any:
         """通过点分隔的路径获取配置值
         
@@ -118,15 +135,18 @@ class ConfigManager:
     def get_ai_config(self, provider: str = None) -> Dict[str, Any]:
         """获取AI配置"""
         if provider is None:
-            provider = self.get('ai.provider', 'openai')
+            provider = self.get('ai.provider', 'moonshot')
         
         providers = self.get('ai.providers', {})
         return providers.get(provider, {})
     
     def set_ai_config(self, provider: str, config: Dict[str, Any]):
         """设置AI配置"""
-        providers = self._config.setdefault('ai', {}).setdefault('providers', {})
-        providers[provider] = config
+        if 'ai' not in self._config:
+            self._config['ai'] = {}
+        if 'providers' not in self._config['ai']:
+            self._config['ai']['providers'] = {}
+        self._config['ai']['providers'][provider] = config
     
     def get_video_config(self) -> Dict[str, Any]:
         """获取视频配置"""
@@ -148,14 +168,36 @@ class ConfigManager:
         profiles = self.get('performance_profiles', {})
         return profiles.get(profile, {})
     
+    def _obfuscate(self, value: str) -> str:
+        """简单的密钥混淆（非加密，仅防止明文外泄）"""
+        import base64
+        if not value:
+            return value
+        return base64.b64encode(value.encode()).decode()
+
+    def _deobfuscate(self, value: str) -> str:
+        """反混淆，兼容旧明文格式"""
+        import base64
+        if not value:
+            return value
+        try:
+            return base64.b64decode(value.encode()).decode()
+        except Exception:
+            return value  # 兼容旧明文格式
+
     def save_config(self):
         """保存配置到文件"""
         try:
             self.config_dir.mkdir(exist_ok=True)
+            config_copy = copy.deepcopy(self._config)
+            # 混淆所有 provider 的 api_key
+            for provider_cfg in config_copy.get('ai', {}).get('providers', {}).values():
+                if 'api_key' in provider_cfg and provider_cfg['api_key']:
+                    provider_cfg['api_key'] = self._obfuscate(provider_cfg['api_key'])
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(self._config, f, indent=2, ensure_ascii=False)
+                json.dump(config_copy, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"保存配置文件失败: {e}")
+            logger.warning(f"保存配置文件失败: {e}")
     
     def reset_config(self):
         """重置为默认配置"""
@@ -168,7 +210,7 @@ class ConfigManager:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self._config, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"导出配置失败: {e}")
+            logger.warning(f"导出配置失败: {e}")
     
     def import_config(self, file_path: str):
         """从文件导入配置"""
@@ -177,7 +219,7 @@ class ConfigManager:
                 self._config = json.load(f)
             self.save_config()
         except Exception as e:
-            print(f"导入配置失败: {e}")
+            logger.warning(f"导入配置失败: {e}")
     
     def get_available_providers(self) -> Dict[str, Dict[str, str]]:
         """获取可用的AI提供商 - 仅保留Moonshot"""

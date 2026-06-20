@@ -8,6 +8,7 @@ import re
 import subprocess
 from pathlib import Path
 import pysubs2
+from utils.ffmpeg_locate import locate_ffmpeg, locate_ffprobe
 
 def parse_lrc_manually(lrc_path):
     """手动解析LRC文件"""
@@ -58,17 +59,17 @@ def parse_lrc_manually(lrc_path):
 def extract_cover_image(audio_path, cover_path):
     """从音频文件提取封面图片"""
     try:
-        cmd = ['ffmpeg', '-y', '-i', str(audio_path), '-an', '-vcodec', 'copy', str(cover_path)]
+        cmd = [locate_ffmpeg(), '-y', '-i', str(audio_path), '-an', '-vcodec', 'copy', str(cover_path)]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return cover_path.exists()
-    except:
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
         return False
 
 def get_audio_duration(audio_path):
     """获取音频文件时长"""
     try:
         result = subprocess.run([
-            'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+            locate_ffprobe(), '-v', 'error', '-show_entries', 'format=duration',
             '-of', 'default=noprint_wrappers=1:nokey=1', str(audio_path)
         ], capture_output=True, text=True)
         return float(result.stdout.strip())

@@ -32,7 +32,7 @@ class AITitleGenerator:
             # 从配置管理器获取配置
             config = get_config()
             ai_config = config.get("ai", {})
-            provider = ai_config.get("provider", "openrouter")
+            provider = ai_config.get("provider", "moonshot")
             providers = ai_config.get("providers", {})
             provider_config = providers.get(provider, {})
             

@@ -6,6 +6,7 @@
 
 import json
 import os
+import time
 import shutil
 from pathlib import Path
 
@@ -29,7 +30,7 @@ def migrate_config():
     print("🔧 开始迁移旧配置文件...")
     
     # 创建备份
-    backup_dir = config_dir / "backup_" + str(int(os.time()))
+    backup_dir = config_dir / ("backup_" + str(int(time.time())))
     backup_dir.mkdir(exist_ok=True)
     
     # 加载旧配置
@@ -77,9 +78,17 @@ def migrate_config():
     # 迁移 ai_config.json
     if (config_dir / "ai_config.json").exists():
         with open(config_dir / "ai_config.json", 'r', encoding='utf-8') as f:
-            ai_config = json.load(f)
-        
-
+            ai_cfg = json.load(f)
+        # 将旧AI配置合并到新配置结构
+        old_config.setdefault("ai", {}).update({
+            "enabled": bool(ai_cfg.get("api_key", "")),
+            "provider": "moonshot",
+        })
+        old_config.setdefault("ai", {}).setdefault("providers", {})["moonshot"] = {
+            "api_key": ai_cfg.get("api_key", ""),
+            "base_url": ai_cfg.get("base_url", "https://api.moonshot.cn/v1"),
+            "model": ai_cfg.get("model", "kimi-k2-turbo-preview"),
+        }
     
     # 系统配置和优化配置已整合到统一配置模板中，无需单独迁移
     

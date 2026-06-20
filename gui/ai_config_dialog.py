@@ -201,17 +201,14 @@ class AIConfigDialog(tk.Toplevel):
     
     def load_config(self):
         """加载当前配置"""
-        from utils.config_manager import get_config
         config = get_config()
         ai_config = config.get("ai", {})
         
         # 启用状态
         self.enabled_var.set(ai_config.get("enabled", True))
-        
 
-        
         # 提供商
-        current_provider = ai_config.get("provider", "openrouter")
+        current_provider = ai_config.get("provider", "moonshot")
         self.provider_var.set(current_provider)
         
         # 加载当前提供商的配置
@@ -232,7 +229,7 @@ class AIConfigDialog(tk.Toplevel):
         # Moonshot默认配置
         if provider == "moonshot":
             self.base_url_var.set("https://api.moonshot.cn/v1")
-            self.model_var.set("kimi-k2-0711-preview")
+            self.model_var.set("kimi-k2-turbo-preview")
         
         # 清空API密钥
         self.api_key_var.set("")
@@ -262,15 +259,9 @@ class AIConfigDialog(tk.Toplevel):
             self.test_btn.config(state="normal")
             return
         
-        # 临时更新配置用于测试
-        temp_config = {
-            "api_key": api_key,
-            "base_url": base_url,
-            "model": model
-        }
-        
         # 使用测试线程避免阻塞UI
         import threading
+        from urllib.parse import urljoin
         
         def test_thread():
             try:
@@ -288,7 +279,7 @@ class AIConfigDialog(tk.Toplevel):
                 }
                 
                 response = requests.post(
-                    f"{base_url}/chat/completions",
+                    urljoin(base_url.rstrip("/") + "/", "chat/completions"),
                     headers=headers,
                     json=test_data,
                     timeout=5
@@ -304,8 +295,9 @@ class AIConfigDialog(tk.Toplevel):
             except Exception as e:
                 result = {"success": False, "message": str(e)}
             
-            # 更新UI
-            self.after(0, lambda: self.update_test_result(result))
+            # 更新UI - 检查窗口是否还存在
+            if self.winfo_exists():
+                self.after(0, lambda: self.update_test_result(result))
         
         thread = threading.Thread(target=test_thread)
         thread.daemon = True
@@ -323,34 +315,27 @@ class AIConfigDialog(tk.Toplevel):
     def save_config(self):
         """保存配置"""
         try:
-            # 获取当前配置
-            from utils.config_manager import get_config
             config = get_config()
-            
-            # 更新AI配置
-            ai_config = config._config.setdefault("ai", {})
-            
-            ai_config["enabled"] = self.enabled_var.get()
-            ai_config["provider"] = self.provider_var.get()
-            ai_config["timeout"] = self.timeout_var.get()
-            ai_config["max_retries"] = self.retries_var.get()
-            
-            # 确保providers存在
-            providers = ai_config.setdefault("providers", {})
-            
+
             provider = self.provider_var.get()
-            providers[provider] = {
+            # 使用 ConfigManager 公共 API 逐项设置
+            config.set("ai.enabled", self.enabled_var.get())
+            config.set("ai.provider", provider)
+            config.set("ai.timeout", self.timeout_var.get())
+            config.set("ai.max_retries", self.retries_var.get())
+
+            # 使用 set_ai_config 保存提供商详情
+            provider_config = {
                 "api_key": self.api_key_var.get().strip(),
                 "base_url": self.base_url_var.get().strip(),
-                "model": self.model_var.get().strip()
+                "model": self.model_var.get().strip(),
             }
-            
-            # 保存配置
+            config.set_ai_config(provider, provider_config)
+
             config.save_config()
-            
             messagebox.showinfo("成功", "配置已保存")
             self.destroy()
-            
+
         except Exception as e:
             messagebox.showerror("错误", f"保存配置失败: {e}")
     
@@ -358,13 +343,8 @@ class AIConfigDialog(tk.Toplevel):
         """重置配置"""
         if messagebox.askyesno("确认", "确定要重置为默认配置吗？"):
             try:
-                # 重置AI配置为默认值
-                from utils.config_manager import get_config
                 config = get_config()
-                if "ai" in config._config:
-                    del config._config["ai"]
-                config.save_config()
-                
+                config.reset_config()
                 # 重新加载配置
                 self.load_config()
                 messagebox.showinfo("成功", "已重置为默认配置")

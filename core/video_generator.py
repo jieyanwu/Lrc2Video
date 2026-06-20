@@ -7,25 +7,38 @@
 import os
 import logging
 import subprocess
+import threading
 from pathlib import Path
 import pysubs2
 from utils.file_utils import parse_lrc_manually, extract_cover_image, get_audio_duration
 from utils.ai_title_generator import generate_video_title
+from utils.ffmpeg_locate import locate_ffmpeg, locate_ffprobe
+from utils.hardware_detector import detect_software_encoder
 
 logger = logging.getLogger(__name__)
 
 class VideoGenerator:
     def __init__(self, progress_callback=None):
         self.progress_callback = progress_callback
-        self.stop_flag = False
+        self._stop_flag = False
+        self._lock = threading.Lock()
         self.current_process = None
-        logger.info("🎬 视频生成器初始化完成")
+        # 检测可用的软件编码器
+        self._sw_encoder, self._sw_encoder_supports_crf = detect_software_encoder()
+        logger.info(f"🎬 视频生成器初始化完成 (软件编码器: {self._sw_encoder})")
     
     def set_stop_flag(self, stop=True):
-        """设置停止标志"""
-        self.stop_flag = stop
+        """设置停止标志（线程安全）"""
+        with self._lock:
+            self._stop_flag = stop
         if stop and self.current_process:
             self.terminate_ffmpeg_process()
+    
+    @property
+    def stop_flag(self):
+        """线程安全的停止标志读取"""
+        with self._lock:
+            return self._stop_flag
     
     def update_progress(self, current, total, message=""):
         """更新进度 - 带调试"""
@@ -42,12 +55,9 @@ class VideoGenerator:
         hex_color = hex_color.lstrip('#')
         r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
         # ASS颜色格式是BGR顺序的十六进制整数，包含透明度(FF)
-        color_int = int(f"00{b:02x}{g:02x}{r:02x}", 16)
-        print(f"原始颜色: {hex_color}, 转换后: {color_int} (&H00{b:02x}{g:02x}{r:02x})")  # 调试日志
-        return color_int
+        return int(f"00{b:02x}{g:02x}{r:02x}", 16)
 
     def apply_subtitle_style(self, subs, config):
-        print(f"接收到的颜色配置: {config.get('font_color')}")  # 调试日志
         """应用字幕样式"""
         # 获取默认样式，如果不存在则创建
         if 'Default' not in subs.styles:
@@ -187,6 +197,7 @@ class VideoGenerator:
             self.update_progress(50, 100, "处理背景图片...")
             
             # 尝试从音频文件提取封面 - 使用音频文件名作为临时文件名，保存到temp目录
+            cover_path = None  # 确保在所有路径中都有定义
             if not bg_image_path:
                 audio_name = Path(audio_path).stem
                 temp_dir = Path('temp')
@@ -212,18 +223,18 @@ class VideoGenerator:
             # 执行FFmpeg命令
             self.current_process = subprocess.Popen(
                         cmd,
-                        stdout=subprocess.PIPE,
+                        stdout=subprocess.DEVNULL,
                         stderr=subprocess.PIPE,
                         text=True,
                         encoding='utf-8',
                         errors='replace'
                     )
             
-            # 实时进度监控 - 简化为单行输出
+            # 实时进度监控 - 收集所有stderr用于错误诊断
             logger.info("🎬 FFmpeg处理中...")
             last_logged_progress = -1
-            start_time = None
-            
+            all_stderr_lines = []  # 收集所有输出用于错误诊断
+
             while True:
                 if self.stop_flag:
                     logger.warning("⚠️  用户取消操作")
@@ -231,6 +242,8 @@ class VideoGenerator:
                     return False, "操作已取消"
                 
                 output = self.current_process.stderr.readline()
+                if output:
+                    all_stderr_lines.append(output)
                 if output == '' and self.current_process.poll() is not None:
                     break
                 
@@ -254,9 +267,11 @@ class VideoGenerator:
             print()  # 换行
             
             if self.current_process.returncode != 0:
-                error_output = self.current_process.stderr.read()
-                logger.error(f"💥 FFmpeg错误: {error_output}")
-                return False, f"FFmpeg错误: {error_output}"
+                # 使用循环中收集的stderr（流已被消费，无法再次read）
+                collected = ''.join(all_stderr_lines).strip()
+                logger.error(f"💥 FFmpeg错误: {collected}")
+                logger.error(f"💥 失败命令: {' '.join(cmd)}")
+                return False, f"FFmpeg错误: {collected}"
             
             print(f"✅ 完成: {output_path.name}")
             
@@ -264,7 +279,7 @@ class VideoGenerator:
             self.current_process = None
             
             # 清理临时文件
-            self.cleanup_temp_files(ass_path)
+            self.cleanup_temp_files(ass_path, cover_path)
             
             self.update_progress(100, 100, "完成")
             return True, str(output_path.absolute())
@@ -275,7 +290,8 @@ class VideoGenerator:
             audio_name = Path(audio_path).stem
             temp_dir = Path('temp')
             temp_ass_path = temp_dir / f'temp_{audio_name}_ass.ass'
-            self.cleanup_temp_files(temp_ass_path)
+            temp_cover_path = temp_dir / f'temp_{audio_name}_pic.jpg'
+            self.cleanup_temp_files(temp_ass_path, temp_cover_path)
             return False, f"生成失败: {str(e)}"
             
     def parse_lrc(self, lrc_path):
@@ -290,7 +306,7 @@ class VideoGenerator:
         """获取音频码率"""
         try:
             result = subprocess.run([
-                'ffprobe', '-v', 'error', '-select_streams', 'a:0',
+                locate_ffprobe(), '-v', 'error', '-select_streams', 'a:0',
                 '-show_entries', 'stream=bit_rate', '-of', 'csv=p=0', str(audio_path)
             ], capture_output=True, text=True)
             bitrate = int(result.stdout.strip())
@@ -308,7 +324,7 @@ class VideoGenerator:
         thread_count = config.get('thread_count', 0)  # 0表示自动
         
         # 基础命令
-        cmd = ['ffmpeg', '-y']
+        cmd = [locate_ffmpeg(), '-y']
         
         # 添加线程配置（仅软件编码有效）
         if hwaccel == 'none' and thread_count > 0:
@@ -316,8 +332,8 @@ class VideoGenerator:
         
         if bg_image_path and Path(bg_image_path).exists():
             # 有背景图片的情况
-            # 处理字幕路径中的反斜杠问题
-            subtitles_path = str(ass_path).replace('\\', '/')
+            # 处理字幕路径（使用POSIX风格避免FFmpeg跨平台兼容问题）
+            subtitles_path = ass_path.as_posix()
             cmd.extend([
                 '-loop', '1', '-i', str(bg_image_path),
                 '-i', str(audio_path),
@@ -331,8 +347,8 @@ class VideoGenerator:
         else:
             # 纯色背景的情况
             bg_color = config.get('background_color', '#000000').lstrip('#')
-            # 处理字幕路径中的反斜杠问题
-            subtitles_path = str(ass_path).replace('\\', '/')
+            # 处理字幕路径（使用POSIX风格避免FFmpeg跨平台兼容问题）
+            subtitles_path = ass_path.as_posix()
             cmd.extend([
                 '-f', 'lavfi',
                 '-i', f'color=c={bg_color}:s={config.get("width", 1920)}x{config.get("height", 1080)}:r=25',
@@ -365,12 +381,32 @@ class VideoGenerator:
             cmd.extend(['-c:v', 'h264_videotoolbox', '-allow_sw', '1'])
             
         else:
-            # 软件编码 (libx264)
-            cmd.extend(['-c:v', 'libx264', '-preset', preset, '-tune', tune, '-crf', str(crf)])
+            # 软件编码 - 使用检测到的编码器
+            if self._sw_encoder == 'libx264':
+                cmd.extend(['-c:v', 'libx264', '-preset', preset, '-tune', tune, '-crf', str(crf)])
+            elif self._sw_encoder == 'libopenh264':
+                # libopenh264 不支持 preset/tune/crf，使用比特率控制质量
+                width = int(config.get('width', 1920))
+                height = int(config.get('height', 1080))
+                resolution_factor = (width * height) / (1920 * 1080)
+                # 根据CRF推算比特率倍数（CRF越低质量越高，比特率越大）
+                crf_multiplier = max(0.5, (30 - crf) * 0.3)
+                target_bitrate_k = int(resolution_factor * crf_multiplier * 2000)
+                cmd.extend([
+                    '-c:v', 'libopenh264',
+                    '-b:v', f'{target_bitrate_k}k',
+                    '-profile', 'high',
+                    '-loopfilter', '1',
+                    '-allow_skip_frames', '1'
+                ])
+                logger.debug(f"libopenh264 目标码率: {target_bitrate_k}k (分辨率: {width}x{height}, CRF模拟: {crf})")
+            else:
+                # 未知编码器，尝试使用
+                cmd.extend(['-c:v', self._sw_encoder])
         
         # 添加输出路径
         cmd.append(str(output_path))
-        print(cmd)
+        logger.debug(f"FFmpeg命令: {' '.join(cmd)}")
         return cmd
     
     def parse_ffmpeg_progress(self, output_line, total_duration):
@@ -385,30 +421,24 @@ class VideoGenerator:
                 return (current_time / total_duration) * 100
         return None
     
-    def cleanup_temp_files(self, ass_path):
+    def cleanup_temp_files(self, ass_path, cover_path=None):
         """清理临时文件"""
         try:
-            # 清理指定路径的临时文件
-            if ass_path.exists(): 
+            if ass_path.exists():
                 ass_path.unlink()
+            if cover_path and cover_path.exists():
+                cover_path.unlink()
             
             # 清理temp目录下的所有临时文件
             temp_dir = Path('temp')
             if temp_dir.exists():
-                # 清理字幕文件
                 for temp_file in temp_dir.glob('temp_*_ass.ass'):
-                    if temp_file.exists():
-                        temp_file.unlink()
-                
-                # 清理封面文件
+                    temp_file.unlink(missing_ok=True)
                 for temp_file in temp_dir.glob('temp_*_pic.jpg'):
-                    if temp_file.exists():
-                        temp_file.unlink()
-                        
-                # 如果temp目录为空，也删除目录
+                    temp_file.unlink(missing_ok=True)
                 try:
                     temp_dir.rmdir()
-                except:
+                except OSError:
                     pass  # 目录不为空，保留
                     
         except Exception as e:
@@ -419,20 +449,17 @@ class VideoGenerator:
         try:
             if self.current_process and self.current_process.poll() is None:
                 self.current_process.terminate()
-                # 等待进程终止，最多等待3秒
                 try:
                     self.current_process.wait(timeout=3)
                 except subprocess.TimeoutExpired:
-                    # 如果terminate不起作用，使用kill强制终止
                     self.current_process.kill()
                     self.current_process.wait()
-                finally:
-                    self.current_process = None
         except Exception as e:
-            print(f"终止FFmpeg进程时出错: {e}")
+            logger.debug(f"终止FFmpeg进程时出错: {e}")
+        finally:
             self.current_process = None
 
-    def __del__(self):
-        """析构函数，确保清理资源"""
+    def cleanup(self):
+        """显式清理资源（替代不可靠的 __del__）"""
         if self.current_process and self.current_process.poll() is None:
             self.terminate_ffmpeg_process()

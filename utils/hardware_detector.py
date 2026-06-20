@@ -7,6 +7,7 @@
 import subprocess
 import re
 import platform
+from utils.ffmpeg_locate import locate_ffmpeg
 
 def detect_hardware_acceleration():
     """检测系统支持的硬件加速类型"""
@@ -14,7 +15,7 @@ def detect_hardware_acceleration():
     
     try:
         # 检测NVIDIA NVENC
-        result = subprocess.run(['ffmpeg', '-hide_banner', '-encoders'], 
+        result = subprocess.run([locate_ffmpeg(), '-hide_banner', '-encoders'], 
                               capture_output=True, text=True, encoding='utf-8')
         encoders = result.stdout.lower()
         
@@ -59,13 +60,14 @@ def get_gpu_info():
         
         elif platform.system() == "Linux":
             # Linux使用lspci获取GPU信息
-            result = subprocess.run(['lspci', '|', 'grep', '-i', 'vga'], 
-                                  capture_output=True, text=True, encoding='utf-8')
-            if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
-                for line in lines:
-                    if 'vga' in line.lower():
-                        gpu_info.append(line.split(': ')[1] if ': ' in line else line)
+            try:
+                result = subprocess.run(['lspci'], capture_output=True, text=True, encoding='utf-8')
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n'):
+                        if 'vga' in line.lower():
+                            gpu_info.append(line.split(': ')[1] if ': ' in line else line)
+            except FileNotFoundError:
+                pass
         
         elif platform.system() == "Darwin":
             # macOS使用system_profiler
@@ -82,6 +84,28 @@ def get_gpu_info():
         print(f"获取GPU信息错误: {e}")
     
     return gpu_info
+
+def detect_software_encoder():
+    """检测可用的软件H.264编码器，返回编码器名称和是否支持CRF"""
+    try:
+        result = subprocess.run(
+            [locate_ffmpeg(), '-hide_banner', '-encoders'],
+            capture_output=True, text=True, encoding='utf-8'
+        )
+        encoders = result.stdout
+        
+        # 优先 libx264（最广泛支持，质量最好）
+        if 'libx264' in encoders:
+            return 'libx264', True
+        # 其次 libopenh264（OpenH264，某些构建可能只有这个）
+        if 'libopenh264' in encoders:
+            return 'libopenh264', False
+    except Exception as e:
+        print(f"检测软件编码器错误: {e}")
+    
+    # 都没找到就回退到 libx264 尝试（让FFmpeg报错）
+    return 'libx264', True
+
 
 def get_recommended_settings():
     """获取推荐的编码设置"""

@@ -3,10 +3,8 @@ pysubs2>=1.6.1
 openai>=1.0.0
 
 # 可选依赖（根据需要安装）
- requests 
- #- 用于网络请求
- matplotlib 
- #- 用于获取系统字体列表（可选）
+requests>=2.28.0  # 用于网络请求
+matplotlib>=3.5.0  # 用于获取系统字体列表（可选）
 
 # 标准库（通常不需要安装）
 # pathlib - Python 3.4+ 内置

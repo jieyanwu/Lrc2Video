@@ -60,3 +60,6 @@ temp_*.ass
 # 缓存文件
 .cache/
 .pytest_cache/
+
+# FFmpeg 二进制（过大，请手动下载）
+ffmpeg/bin/*.exe
