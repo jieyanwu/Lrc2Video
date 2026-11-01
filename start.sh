@@ -1,13 +1,18 @@
 #!/bin/bash
-# LRC2Video Gradio 启动脚本
+# Lrc2Video 启动脚本
+# 用法: bash start.sh
 
 cd "$(dirname "$0")"
+
+# 如果有虚拟环境，激活它
+if [ -d "venv" ]; then
+    source venv/bin/activate
+fi
 
 # 创建必要目录
 mkdir -p uploads outputs logs
 
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动 Gradio 应用
+# 启动 Gradio Web UI
+echo "🚀 启动 Lrc2Video..."
+echo "📱 浏览器访问: http://localhost:7860"
 python app.py

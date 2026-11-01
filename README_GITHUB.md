@@ -38,47 +38,48 @@
 └─────────────────────────────────────┘
 ```
 
-## 🚀 快速开始
+## 🚀 快速开始（3步跑起来）
 
-### 1. 安装依赖
+### 1. 克隆项目
 
 ```bash
 git clone https://github.com/jieyanwu/Lrc2Video.git
 cd Lrc2Video
+```
+
+### 2. 一键安装
+
+```bash
+bash setup.sh
+```
+
+自动完成：创建虚拟环境 + 安装依赖 + 下载中文字体 + 生成配置
+
+### 3. 启动
+
+```bash
+bash start.sh
+```
+
+打开浏览器访问 **http://localhost:7860** 🎉
+
+---
+
+### 手动安装（不使用 setup.sh）
+
+```bash
+# 1. 安装依赖
 pip install -r requirements.txt
-```
 
-### 2. 安装 FFmpeg
+# 2. 安装 FFmpeg
+sudo apt install ffmpeg   # Ubuntu/Debian
+brew install ffmpeg       # macOS
 
-```bash
-# Ubuntu/Debian
-sudo apt install ffmpeg
+# 3. 放入中文字体到 fonts/ 目录
 
-# macOS
-brew install ffmpeg
-
-# Windows
-# 从 https://ffmpeg.org/download.html 下载并添加到 PATH
-```
-
-### 3. 准备字体
-
-下载你喜欢的字体（如：方正行楷）放到 `fonts/` 目录。
-
-### 4. 启动
-
-```bash
-# Web UI (Gradio) - 推荐
-./start.sh
-
-# 或直接运行
+# 4. 启动
 python app.py
-
-# 桌面 GUI (PyQt5)
-python main.py
 ```
-
-打开浏览器访问 `http://localhost:7860` 即可使用。
 
 ## 📁 项目结构
 
