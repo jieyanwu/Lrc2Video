@@ -10,7 +10,8 @@ import subprocess
 import threading
 from pathlib import Path
 import pysubs2
-from utils.file_utils import parse_lrc_manually, extract_cover_image, get_audio_duration
+from utils.file_utils import parse_lrc_manually, parse_lrc_typewriter, extract_cover_image, get_audio_duration
+from utils.audio_analyzer import calculate_dynamic_speed
 from utils.ai_title_generator import generate_video_title
 from utils.ffmpeg_locate import locate_ffmpeg, locate_ffprobe
 from utils.hardware_detector import detect_software_encoder
@@ -54,48 +55,61 @@ class VideoGenerator:
     def hex_to_ass_color(self, hex_color):
         hex_color = hex_color.lstrip('#')
         r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        # ASS颜色格式是BGR顺序的十六进制整数，包含透明度(FF)
-        return int(f"00{b:02x}{g:02x}{r:02x}", 16)
+        # ASS颜色格式: &H00BBGGRR& (Alpha=00不透明)
+        return f"&H00{b:02X}{g:02X}{r:02X}&"
 
     def apply_subtitle_style(self, subs, config):
         """应用字幕样式"""
         # 获取默认样式，如果不存在则创建
         if 'Default' not in subs.styles:
             subs.styles['Default'] = pysubs2.SSAStyle()
-        
+
         style = subs.styles['Default']
-        
-        # 设置字体和大小
-        style.fontname = config.get('font_family', 'Arial')
+
+        # 处理自定义字体
+        font_family = config.get('font_family', 'Arial')
+        font_path = Path(font_family)
+
+        # 检查是否是自定义字体文件（存在且是文件）
+        if font_family and font_path.exists() and font_path.is_file():
+            # 自定义字体文件，从文件名提取字体名称
+            style.fontname = font_path.stem
+            # 记录字体目录供 FFmpeg 使用
+            self._custom_font_dir = str(font_path.parent)
+            logger.info(f"🔍 使用自定义字体: {font_path.name} (目录: {self._custom_font_dir})")
+        else:
+            style.fontname = font_family
+            self._custom_font_dir = None
+
         style.fontsize = config.get('font_size', 36)
-        
-        # 设置对齐方式（中心对齐）
-        style.alignment = 2  # 底部中心对齐
-        
+
+        # 设置对齐方式（从配置读取，默认居中）
+        style.alignment = config.get('alignment', 5)
+
         # 设置边距
-        style.marginv = config.get('margin_bottom', 50)  # 底部边距
+        style.marginv = config.get('margin_bottom', 50)
         style.marginl = config.get('margin_left', 10)
         style.marginr = config.get('margin_right', 10)
-        
+
         # 设置描边和阴影
         style.outline = config.get('outline_width', 3)
         style.shadow = config.get('shadow_offset', 2)
-        
+
         # 设置字体样式
         style.bold = -1 if config.get('bold', True) else 0
         style.italic = -1 if config.get('italic', False) else 0
-        
+
         # 设置颜色
         style.primarycolor = self.hex_to_ass_color(config.get('font_color', '#FFFFFF'))
         style.outlinecolor = self.hex_to_ass_color(config.get('outline_color', '#000000'))
         style.backcolor = self.hex_to_ass_color(config.get('shadow_color', '#000000'))
-        
+
         # 为每个字幕事件添加特效
+        alignment = config.get('alignment', 5)
         for event in subs:
-            # 添加淡入淡出效果和对齐方式
             fade_in = config.get('fade_in', 500)
             fade_out = config.get('fade_out', 500)
-            event.text = f"{{\\an2\\fad({fade_in},{fade_out})}}" + event.text
+            event.text = f"{{\\an{alignment}\\fad({fade_in},{fade_out})}}" + event.text
     
     def generate_video(self, audio_path, lrc_path, config, bg_image_path=None, output_path=None, use_ai_title=True):
         """生成单个视频 - 带详细调试"""
@@ -148,20 +162,30 @@ class VideoGenerator:
             print(f"📄 解析歌词: {Path(lrc_path).name}")
             
             # 解析歌词文件
+            subtitle_effect = config.get("subtitle_effect", "fade")
+            typewriter_mode = config.get("typewriter_mode", "sync")
+            
             try:
-                subs = pysubs2.load(str(lrc_path), format_='lrc', encoding='utf-8')
-            except:
-                try:
-                    subs = parse_lrc_manually(lrc_path)
-                except Exception as e:
-                    logger.error(f"💥 LRC文件解析失败: {e}")
-                    return False, f"LRC文件解析失败: {str(e)}"
+                if subtitle_effect == "typewriter":
+                    # 打字机模式
+                    print(f"  效果: 打字机 ({typewriter_mode}模式)")
+                    subs = parse_lrc_typewriter(lrc_path, mode=typewriter_mode)
+                else:
+                    # 淡入淡出模式
+                    print(f"  效果: 淡入淡出")
+                    try:
+                        subs = pysubs2.load(str(lrc_path), format_='lrc', encoding='utf-8')
+                    except:
+                        subs = parse_lrc_manually(lrc_path)
+            except Exception as e:
+                logger.error(f"💥 LRC文件解析失败: {e}")
+                return False, f"LRC文件解析失败: {str(e)}"
             
             if not subs:
                 logger.error("💥 LRC文件中没有找到有效的歌词")
                 return False, "LRC文件中没有找到有效的歌词"
                 
-            print(f"✅ 歌词: {len(subs)}行")
+            print(f"✅ 歌词: {len(subs)}条字幕")
             
             if self.stop_flag:
                 return False, "操作已取消"
@@ -218,7 +242,7 @@ class VideoGenerator:
             
             # 生成FFmpeg命令
             cmd = self.build_ffmpeg_command(audio_path, bg_image_path, config, duration, audio_bitrate, ass_path, output_path)
-            print(f"🎬 生成: {output_path.name}")
+            print(f"🎬 生成: {Path(output_path).name}")
             
             # 执行FFmpeg命令
             self.current_process = subprocess.Popen(
@@ -272,17 +296,17 @@ class VideoGenerator:
                 logger.error(f"💥 FFmpeg错误: {collected}")
                 logger.error(f"💥 失败命令: {' '.join(cmd)}")
                 return False, f"FFmpeg错误: {collected}"
-            
-            print(f"✅ 完成: {output_path.name}")
+
+            print(f"✅ 完成: {Path(output_path).name}")
             
             # 清理进程引用
             self.current_process = None
             
             # 清理临时文件
             self.cleanup_temp_files(ass_path, cover_path)
-            
+
             self.update_progress(100, 100, "完成")
-            return True, str(output_path.absolute())
+            return True, str(Path(output_path).absolute())
             
         except Exception as e:
             logger.error(f"💥 视频生成失败: {e}", exc_info=True)
@@ -322,40 +346,44 @@ class VideoGenerator:
         crf = config.get('crf', 23)
         hwaccel = config.get('hwaccel', 'none')
         thread_count = config.get('thread_count', 0)  # 0表示自动
-        
+
         # 基础命令
         cmd = [locate_ffmpeg(), '-y']
-        
+
         # 添加线程配置（仅软件编码有效）
         if hwaccel == 'none' and thread_count > 0:
             cmd.extend(['-threads', str(thread_count)])
-        
+
+        # 处理字幕路径（使用POSIX风格避免FFmpeg跨平台兼容问题）
+        subtitles_path = ass_path.as_posix()
+
+        # 构建字幕滤镜（支持自定义字体目录）
+        subtitle_filter = f'subtitles={subtitles_path}'
+        if hasattr(self, '_custom_font_dir') and self._custom_font_dir:
+            subtitle_filter = f'subtitles={subtitles_path}:fontsdir={self._custom_font_dir}'
+
         if bg_image_path and Path(bg_image_path).exists():
             # 有背景图片的情况
-            # 处理字幕路径（使用POSIX风格避免FFmpeg跨平台兼容问题）
-            subtitles_path = ass_path.as_posix()
             cmd.extend([
                 '-loop', '1', '-i', str(bg_image_path),
                 '-i', str(audio_path),
-                '-filter_complex', 
-                f'[0:v]scale={config.get("width",1920)}:{config.get("height",1080)}:force_original_aspect_ratio=increase,crop={config.get("width",1920)}:{config.get("height",1080)},subtitles={subtitles_path}[v]',
+                '-filter_complex',
+                f'[0:v]scale={config.get("width",1920)}:{config.get("height",1080)}:force_original_aspect_ratio=increase,crop={config.get("width",1920)}:{config.get("height",1080)},{subtitle_filter},format=yuv420p[v]',
                 '-map', '[v]', '-map', '1:a',
-                '-c:a', 'copy',
+                '-c:a', 'aac', '-b:a', '320k',
                 '-t', str(duration),
                 '-shortest'
             ])
         else:
             # 纯色背景的情况
             bg_color = config.get('background_color', '#000000').lstrip('#')
-            # 处理字幕路径（使用POSIX风格避免FFmpeg跨平台兼容问题）
-            subtitles_path = ass_path.as_posix()
             cmd.extend([
                 '-f', 'lavfi',
                 '-i', f'color=c={bg_color}:s={config.get("width", 1920)}x{config.get("height", 1080)}:r=25',
                 '-i', str(audio_path),
-                '-filter_complex', f'[0:v]subtitles={subtitles_path}[v]',
+                '-filter_complex', f'[0:v]{subtitle_filter},format=yuv420p[v]',
                 '-map', '[v]', '-map', '1:a',
-                '-c:a', 'copy',
+                '-c:a', 'aac', '-b:a', '320k',
                 '-t', str(duration),
                 '-shortest'
             ])

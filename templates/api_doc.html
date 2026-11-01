@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LRC2Video API 文档</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        .card { background: white; border-radius: 10px; padding: 25px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .card h2 { color: #667eea; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #667eea; }
+        .endpoint { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #667eea; }
+        .method { display: inline-block; background: #667eea; color: white; padding: 3px 10px; border-radius: 4px; font-weight: bold; margin-right: 10px; }
+        .url { font-family: monospace; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #667eea; color: white; }
+        tr:hover { background: #f5f5f5; }
+        pre { background: #2d3748; color: #e2e8f0; padding: 20px; border-radius: 8px; overflow-x: auto; margin: 15px 0; }
+        code { font-family: "Fira Code", monospace; }
+        .lang-switch { position: fixed; top: 20px; right: 20px; z-index: 1000; }
+        .lang-btn { padding: 8px 16px; border: 2px solid #667eea; background: white; color: #667eea; border-radius: 5px; cursor: pointer; font-weight: bold; transition: all 0.3s; }
+        .lang-btn:hover, .lang-btn.active { background: #667eea; color: white; }
+        .en { display: none; }
+        .cn { display: block; }
+        body.en .en { display: block; }
+        body.en .cn { display: none; }
+        .note { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+        .success { background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="lang-switch">
+        <button class="lang-btn active" onclick="switchLang('cn')">中文</button>
+        <button class="lang-btn" onclick="switchLang('en')">English</button>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>🎵 LRC2Video API 文档</h1>
+            <p class="cn">歌词转视频工具 API 接口文档</p>
+            <p class="en">Lyrics to Video Tool API Documentation</p>
+        </div>
+
+        <!-- 快速开始 -->
+        <div class="card">
+            <h2 class="cn">🚀 快速开始</h2>
+            <h2 class="en">🚀 Quick Start</h2>
+
+            <div class="cn">
+                <p>API 基础地址: <code>http://localhost:7860</code></p>
+                <p>所有 API 调用都需要先获取 <code>event_id</code>，然后通过 <code>event_id</code> 获取结果。</p>
+            </div>
+            <div class="en">
+                <p>API Base URL: <code>http://localhost:7860</code></p>
+                <p>All API calls require obtaining an <code>event_id</code> first, then use it to get results.</p>
+            </div>
+        </div>
+
+        <!-- 预览样式 API -->
+        <div class="card">
+            <h2 class="cn">👁️ 预览样式</h2>
+            <h2 class="en">👁️ Preview Style</h2>
+
+            <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="url">/gradio_api/call/preview</span>
+            </div>
+
+            <div class="cn">
+                <p>生成歌词样式预览图，用于在生成视频前预览效果。</p>
+            </div>
+            <div class="en">
+                <p>Generate a lyrics style preview image to preview before generating video.</p>
+            </div>
+
+            <h3 class="cn">请求参数</h3>
+            <h3 class="en">Request Parameters</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th class="cn">参数</th>
+                        <th class="en">Parameter</th>
+                        <th class="cn">类型</th>
+                        <th class="en">Type</th>
+                        <th class="cn">默认值</th>
+                        <th class="en">Default</th>
+                        <th class="cn">说明</th>
+                        <th class="en">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>font_family</td>
+                        <td>string</td>
+                        <td>"Microsoft YaHei"</td>
+                        <td class="cn">字体名称</td>
+                        <td class="en">Font name</td>
+                    </tr>
+                    <tr>
+                        <td>font_file</td>
+                        <td>string/null</td>
+                        <td>null</td>
+                        <td class="cn">自定义字体文件路径</td>
+                        <td class="en">Custom font file path</td>
+                    </tr>
+                    <tr>
+                        <td>font_size</td>
+                        <td>integer</td>
+                        <td>36</td>
+                        <td class="cn">字体大小</td>
+                        <td class="en">Font size</td>
+                    </tr>
+                    <tr>
+                        <td>font_color</td>
+                        <td>string</td>
+                        <td>"#FFFFFF"</td>
+                        <td class="cn">字体颜色</td>
+                        <td class="en">Font color</td>
+                    </tr>
+                    <tr>
+                        <td>outline_color</td>
+                        <td>string</td>
+                        <td>"#000000"</td>
+                        <td class="cn">描边颜色</td>
+                        <td class="en">Outline color</td>
+                    </tr>
+                    <tr>
+                        <td>outline_width</td>
+                        <td>number</td>
+                        <td>3</td>
+                        <td class="cn">描边宽度</td>
+                        <td class="en">Outline width</td>
+                    </tr>
+                    <tr>
+                        <td>bold</td>
+                        <td>boolean</td>
+                        <td>true</td>
+                        <td class="cn">是否加粗</td>
+                        <td class="en">Bold text</td>
+                    </tr>
+                    <tr>
+                        <td>pos_x</td>
+                        <td>string</td>
+                        <td>"中"</td>
+                        <td class="cn">水平位置: 左/中/右</td>
+                        <td class="en">Horizontal position: 左/中/右</td>
+                    </tr>
+                    <tr>
+                        <td>pos_y</td>
+                        <td>string</td>
+                        <td>"下"</td>
+                        <td class="cn">垂直位置: 上/中/下</td>
+                        <td class="en">Vertical position: 上/中/下</td>
+                    </tr>
+                    <tr>
+                        <td>margin_h</td>
+                        <td>integer</td>
+                        <td>10</td>
+                        <td class="cn">水平边距</td>
+                        <td class="en">Horizontal margin</td>
+                    </tr>
+                    <tr>
+                        <td>margin_v</td>
+                        <td>integer</td>
+                        <td>50</td>
+                        <td class="cn">垂直边距</td>
+                        <td class="en">Vertical margin</td>
+                    </tr>
+                    <tr>
+                        <td>bg_color</td>
+                        <td>string</td>
+                        <td>"#000000"</td>
+                        <td class="cn">背景颜色</td>
+                        <td class="en">Background color</td>
+                    </tr>
+                    <tr>
+                        <td>resolution</td>
+                        <td>string</td>
+                        <td>"1920x1080"</td>
+                        <td class="cn">分辨率</td>
+                        <td class="en">Resolution</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="cn">调用示例</h3>
+            <h3 class="en">Example</h3>
+
+            <pre><code class="cn"># 1. 调用接口
+curl -X POST http://localhost:7860/gradio_api/call/preview \
+  -H "Content-Type: application/json" \
+  -d '{"data": ["Microsoft YaHei", null, 36, "#FFFFFF", "#000000", 3, true, "中", "下", 10, 50, "#000000", "1920x1080"]}'
+
+# 返回: {"event_id": "xxx"}
+
+# 2. 获取结果
+curl -N http://localhost:7860/gradio_api/call/preview/{event_id}</code></pre>
+
+            <pre><code class="en"># 1. Call API
+curl -X POST http://localhost:7860/gradio_api/call/preview \
+  -H "Content-Type: application/json" \
+  -d '{"data": ["Microsoft YaHei", null, 36, "#FFFFFF", "#000000", 3, true, "中", "下", 10, 50, "#000000", "1920x1080"]}'
+
+# Returns: {"event_id": "xxx"}
+
+# 2. Get result
+curl -N http://localhost:7860/gradio_api/call/preview/{event_id}</code></pre>
+        </div>
+
+        <!-- 生成视频 API -->
+        <div class="card">
+            <h2 class="cn">🎬 生成视频</h2>
+            <h2 class="en">🎬 Generate Video</h2>
+
+            <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="url">/gradio_api/call/generate</span>
+            </div>
+
+            <div class="cn">
+                <p>生成带歌词字幕的视频。</p>
+            </div>
+            <div class="en">
+                <p>Generate video with lyrics subtitles.</p>
+            </div>
+
+            <h3 class="cn">请求参数</h3>
+            <h3 class="en">Request Parameters</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th class="cn">参数</th>
+                        <th class="en">Parameter</th>
+                        <th class="cn">类型</th>
+                        <th class="en">Type</th>
+                        <th class="cn">必填</th>
+                        <th class="en">Required</th>
+                        <th class="cn">说明</th>
+                        <th class="en">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>audio</td>
+                        <td>FileData</td>
+                        <td>✅</td>
+                        <td class="cn">音频文件</td>
+                        <td class="en">Audio file</td>
+                    </tr>
+                    <tr>
+                        <td>lrc</td>
+                        <td>FileData</td>
+                        <td>✅</td>
+                        <td class="cn">LRC 歌词文件</td>
+                        <td class="en">LRC lyrics file</td>
+                    </tr>
+                    <tr>
+                        <td colspan="5" class="cn"><em>其他参数同"预览样式"接口</em></td>
+                        <td colspan="5" class="en"><em>Other parameters same as Preview Style API</em></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 class="cn">调用示例</h3>
+            <h3 class="en">Example</h3>
+
+            <pre><code class="cn">curl -X POST http://localhost:7860/gradio_api/call/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": [
+      {"path": "/path/to/audio.mp3", "meta": {"_type": "gradio.FileData"}},
+      {"path": "/path/to/lyrics.lrc", "meta": {"_type": "gradio.FileData"}},
+      "Microsoft YaHei", null, 36, "#FFFFFF", "#000000", 3, true,
+      "中", "下", 10, 50, 500, 500, "#000000", "1920x1080"
+    ]
+  }'</code></pre>
+
+            <pre><code class="en">curl -X POST http://localhost:7860/gradio_api/call/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": [
+      {"path": "/path/to/audio.mp3", "meta": {"_type": "gradio.FileData"}},
+      {"path": "/path/to/lyrics.lrc", "meta": {"_type": "gradio.FileData"}},
+      "Microsoft YaHei", null, 36, "#FFFFFF", "#000000", 3, true,
+      "中", "下", 10, 50, 500, 500, "#000000", "1920x1080"
+    ]
+  }'</code></pre>
+        </div>
+
+        <!-- Python 示例 -->
+        <div class="card">
+            <h2 class="cn">🐍 Python 示例</h2>
+            <h2 class="en">🐍 Python Example</h2>
+
+            <pre><code class="cn">import requests
+
+# 1. 预览样式
+response = requests.post(
+    "http://localhost:7860/gradio_api/call/preview",
+    json={
+        "data": [
+            "Microsoft YaHei",  # font_family
+            None,               # font_file
+            36,                 # font_size
+            "#FFFFFF",          # font_color
+            "#000000",          # outline_color
+            3,                  # outline_width
+            True,               # bold
+            "中",               # pos_x
+            "下",               # pos_y
+            10,                 # margin_h
+            50,                 # margin_v
+            "#000000",          # bg_color
+            "1920x1080"         # resolution
+        ]
+    }
+)
+event_id = response.json()["event_id"]
+print(f"Event ID: {event_id}")
+
+# 2. 获取结果
+result = requests.get(
+    f"http://localhost:7860/gradio_api/call/preview/{event_id}",
+    stream=True
+)
+for line in result.iter_lines():
+    if line:
+        print(line.decode())</code></pre>
+
+            <pre><code class="en">import requests
+
+# 1. Preview Style
+response = requests.post(
+    "http://localhost:7860/gradio_api/call/preview",
+    json={
+        "data": [
+            "Microsoft YaHei",  # font_family
+            None,               # font_file
+            36,                 # font_size
+            "#FFFFFF",          # font_color
+            "#000000",          # outline_color
+            3,                  # outline_width
+            True,               # bold
+            "中",               # pos_x
+            "下",               # pos_y
+            10,                 # margin_h
+            50,                 # margin_v
+            "#000000",          # bg_color
+            "1920x1080"         # resolution
+        ]
+    }
+)
+event_id = response.json()["event_id"]
+print(f"Event ID: {event_id}")
+
+# 2. Get result
+result = requests.get(
+    f"http://localhost:7860/gradio_api/call/preview/{event_id}",
+    stream=True
+)
+for line in result.iter_lines():
+    if line:
+        print(line.decode())</code></pre>
+        </div>
+
+        <!-- 响应格式 -->
+        <div class="card">
+            <h2 class="cn">📤 响应格式</h2>
+            <h2 class="en">📤 Response Format</h2>
+
+            <div class="cn">
+                <p>API 使用 SSE (Server-Sent Events) 流式响应格式：</p>
+            </div>
+            <div class="en">
+                <p>API uses SSE (Server-Sent Events) streaming response format:</p>
+            </div>
+
+            <pre><code>event: complete
+data: [{"path": "/tmp/gradio/xxx/image.webp", "url": "http://localhost:7860/gradio_api/file=..."}]</code></pre>
+
+            <div class="note">
+                <p class="cn"><strong>注意：</strong>图片和视频文件通过 <code>url</code> 字段获取，可直接在浏览器中访问。</p>
+                <p class="en"><strong>Note:</strong> Image and video files are obtained via the <code>url</code> field and can be accessed directly in the browser.</p>
+            </div>
+        </div>
+
+        <!-- 错误处理 -->
+        <div class="card">
+            <h2 class="cn">⚠️ 错误处理</h2>
+            <h2 class="en">⚠️ Error Handling</h2>
+
+            <div class="cn">
+                <p>常见错误响应：</p>
+                <ul>
+                    <li><code>404</code> - API 未启用或端点不存在</li>
+                    <li><code>422</code> - 参数验证失败</li>
+                    <li><code>500</code> - 服务器内部错误</li>
+                </ul>
+            </div>
+            <div class="en">
+                <p>Common error responses:</p>
+                <ul>
+                    <li><code>404</code> - API not enabled or endpoint not found</li>
+                    <li><code>422</code> - Parameter validation failed</li>
+                    <li><code>500</code> - Internal server error</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 环境变量 -->
+        <div class="card">
+            <h2 class="cn">🔧 环境变量配置</h2>
+            <h2 class="en">🔧 Environment Variables</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>变量名</th>
+                        <th>默认值</th>
+                        <th class="cn">说明</th>
+                        <th class="en">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>LRC2VIDEO_API_ENABLED</td>
+                        <td>true</td>
+                        <td class="cn">是否启用 API</td>
+                        <td class="en">Enable API</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <pre><code># 禁用 API
+export LRC2VIDEO_API_ENABLED=false
+
+# 启用 API（默认）
+export LRC2VIDEO_API_ENABLED=true</code></pre>
+        </div>
+
+        <div class="card">
+            <div class="success">
+                <p class="cn">✅ <strong>提示：</strong>访问 <a href="/?view=api">/?view=api</a> 可查看 Gradio 自动生成的交互式 API 文档。</p>
+                <p class="en">✅ <strong>Tip:</strong> Visit <a href="/?view=api">/?view=api</a> to view the auto-generated interactive API documentation by Gradio.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchLang(lang) {
+            document.body.className = lang === 'en' ? 'en' : '';
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

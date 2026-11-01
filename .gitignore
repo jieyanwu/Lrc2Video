@@ -41,6 +41,19 @@ output/
 
 # 敏感配置文件
 config/config.json
+cookies.json
+*.cookie
+
+# 大文件/生成文件
+outputs/
+uploads/
+temp_preview/
+
+# 字体文件（有版权，用户自备）
+fonts/*.TTF
+fonts/*.ttf
+fonts/*.otf
+fonts/download.log
 
 # 临时文件
 *.tmp
